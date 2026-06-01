@@ -35,15 +35,19 @@ def account() -> dict:
     eq = s["equity_curve"][-1][1] if s.get("equity_curve") else s.get("cash", start)
     pnls = [t["pnl"] for t in s.get("blotter", [])]
     by: dict = {}
+    by_strat: dict = {}
     for t in s.get("blotter", []):
         d = by.setdefault(t["symbol"], {"trades": 0, "pnl": 0.0, "wins": 0})
         d["trades"] += 1; d["pnl"] = round(d["pnl"] + t["pnl"], 2); d["wins"] += t["pnl"] > 0
+        sk = t.get("strategy") or "orb"          # legacy untagged trades were all orb
+        g = by_strat.setdefault(sk, {"trades": 0, "pnl": 0.0, "wins": 0})
+        g["trades"] += 1; g["pnl"] = round(g["pnl"] + t["pnl"], 2); g["wins"] += t["pnl"] > 0
     return {
         "trading_mode": settings.trading_mode, "live_locked": settings.trading_mode != "live",
         "start_equity": start, "equity": round(eq, 2), "cash": round(s.get("cash", start), 2),
         "total_return": eq / start - 1.0, "n_trades": len(pnls),
         "win_rate": (sum(p > 0 for p in pnls) / len(pnls)) if pnls else None,
-        "open_positions": s.get("positions", {}), "by_symbol": by,
+        "open_positions": s.get("positions", {}), "by_symbol": by, "by_strategy": by_strat,
         "equity_curve": s.get("equity_curve", []), "blotter": list(reversed(s.get("blotter", [])))[:60],
         "monte_carlo": monte_carlo(pnls, starting_equity=start) if len(pnls) >= 3 else {"note": "need >=3 trades"},
         "last_ts": s.get("last_ts"),

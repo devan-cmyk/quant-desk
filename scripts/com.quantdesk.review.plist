@@ -17,7 +17,7 @@
   <array>
     <string>/Users/devantipler/quant-desk/.venv/bin/quant-desk</string>
     <string>review</string>
-    <string>--strategy</string><string>orb</string>
+    <string>--strategy</string><string>orb,meanrev</string>
     <string>--symbols</string><string>SPY,QQQ,IWM,AAPL,NVDA,MSFT</string>
     <string>--regime</string>
   </array>

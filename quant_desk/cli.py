@@ -13,7 +13,7 @@ from .backtest.walkforward import walk_forward
 from .backtest.multisymbol import multi_symbol_walkforward
 from .selection.selector import select_symbols
 from .live.portfolio import PaperPortfolio
-from .live.paper_runner import run_forward
+from .live.paper_runner import run_forward, run_forward_multi
 from .config import settings
 from .data.yfinance_provider import YFinanceProvider
 from .logging import configure, get
@@ -27,6 +27,7 @@ log = get("cli")
 PARAM_GRIDS = {
     "orb": {"or_minutes": [15, 30], "target_r": [1.5, 2.0, 3.0]},
     "vwap": {"target_r": [1.0, 1.5, 2.0], "touch": [0.0005, 0.001]},
+    "meanrev": {"lookback": [20, 30], "entry_z": [2.0, 2.5], "stop_k": [1.0, 1.5]},
 }
 
 
@@ -116,6 +117,11 @@ def _data_fn(interval, days):
     return lambda sym: prov.bars(sym, interval=interval, lookback_days=days)
 
 
+def _strategies(a) -> list[str]:
+    """--strategy accepts a comma list so the whole basket (e.g. orb,meanrev) runs at once."""
+    return [s.strip() for s in a.strategy.split(",") if s.strip()]
+
+
 def cmd_select(a) -> int:
     strat_cls = REGISTRY[a.strategy]
     symbols = [s.strip().upper() for s in a.symbols.split(",") if s.strip()]
@@ -139,41 +145,38 @@ def cmd_select(a) -> int:
 def cmd_monitor(a) -> int:
     from .monitor.decay import monitor_universe
     from .monitor.registry import Registry
-    strat_cls = REGISTRY[a.strategy]
+    from .archive.journal import Journal
     symbols = [s.strip().upper() for s in a.symbols.split(",") if s.strip()]
     rf = RegimeFilter() if a.regime else None
-    assessments = monitor_universe(symbols, strat_cls, PARAM_GRIDS.get(a.strategy, {}),
-                                   data_fn=_data_fn(a.interval, a.days), regime_filter=rf,
-                                   is_sessions=a.is_sessions, oos_sessions=a.oos_sessions)
-    reg = Registry.load()
-    changes = reg.update(a.strategy, assessments)
-    reg.save()
-    # journal the run + an immutable record for each retirement/recovery decision
-    from .archive.journal import Journal
-    jr = Journal()
-    nh = sum(r["status"] == "healthy" for r in assessments)
-    nr = sum(r["status"] == "retired" for r in assessments)
-    jr.record("monitor", strategy=a.strategy, symbols=[r["symbol"] for r in assessments],
-              summary=f"{nh} healthy, {nr} retired", payload={"assessments": assessments})
-    for c in changes:
-        kind = "retirement" if c["to"] == "retired" else "recovery"
-        jr.record(kind, strategy=a.strategy, symbols=[c["symbol"]],
-                  summary=f"{c['symbol']}: {c['from']} → {c['to']}",
-                  decision=("edge decayed — retired" if c["to"] == "retired" else "edge recovered"))
-    jr.close()
+    reg, jr = Registry.load(), Journal()
     icon = {"healthy": "✅", "watch": "⚠️", "retired": "💀", "insufficient_data": "·", "error": "✗"}
     num = lambda v, p: (format(v, p) if v is not None else "—")
-    print(f"\n=== EDGE-DECAY MONITOR: {a.strategy.upper()}{' +regime' if rf else ''} ===")
-    print(f"  {'symbol':8} {'status':16} {'recent OOS':>11} {'trend':>9} {'all-OOS':>9}")
-    for r in assessments:
-        label = f"{icon.get(r['status'], '')} {r['status']}"
-        print(f"  {r['symbol']:8} {label:16} {num(r.get('recent_mean'), '+.4f'):>11} "
-              f"{num(r.get('trend'), '+.5f'):>9} {num(r.get('oos_return'), '+.4f'):>9}")
-    if changes:
-        print("\n  ⚡ STATUS CHANGES since last run:")
+    for strat in _strategies(a):
+        assessments = monitor_universe(symbols, REGISTRY[strat], PARAM_GRIDS.get(strat, {}),
+                                       data_fn=_data_fn(a.interval, a.days), regime_filter=rf,
+                                       is_sessions=a.is_sessions, oos_sessions=a.oos_sessions)
+        changes = reg.update(strat, assessments)
+        nh = sum(r["status"] == "healthy" for r in assessments)
+        nr = sum(r["status"] == "retired" for r in assessments)
+        jr.record("monitor", strategy=strat, symbols=[r["symbol"] for r in assessments],
+                  summary=f"{nh} healthy, {nr} retired", payload={"assessments": assessments})
         for c in changes:
-            print(f"     {c['symbol']}: {c['from']} → {c['to']}")
-    print(f"\n  ACTIVE (paper runner trades these): {reg.active(a.strategy) or '(none)'}")
+            kind = "retirement" if c["to"] == "retired" else "recovery"
+            jr.record(kind, strategy=strat, symbols=[c["symbol"]],
+                      summary=f"{c['symbol']}: {c['from']} → {c['to']}",
+                      decision=("edge decayed — retired" if c["to"] == "retired" else "edge recovered"))
+        print(f"\n=== EDGE-DECAY MONITOR: {strat.upper()}{' +regime' if rf else ''} ===")
+        print(f"  {'symbol':8} {'status':16} {'recent OOS':>11} {'trend':>9} {'all-OOS':>9}")
+        for r in assessments:
+            label = f"{icon.get(r['status'], '')} {r['status']}"
+            print(f"  {r['symbol']:8} {label:16} {num(r.get('recent_mean'), '+.4f'):>11} "
+                  f"{num(r.get('trend'), '+.5f'):>9} {num(r.get('oos_return'), '+.4f'):>9}")
+        if changes:
+            print("\n  ⚡ STATUS CHANGES since last run:")
+            for c in changes:
+                print(f"     {c['symbol']}: {c['from']} → {c['to']}")
+        print(f"\n  ACTIVE (paper runner trades these): {reg.active(strat) or '(none)'}")
+    reg.save(); jr.close()
     return 0
 
 
@@ -195,46 +198,54 @@ def cmd_stress(a) -> int:
 
 
 def cmd_paper_run(a) -> int:
-    strat_cls = REGISTRY[a.strategy]
+    from .monitor.registry import Registry
     data_fn = _data_fn(a.interval, a.days)
     rf = RegimeFilter() if a.regime else None
-    params_by_symbol = None
-    if a.select:
-        sel = select_symbols([s.strip().upper() for s in a.symbols.split(",") if s.strip()],
-                             strat_cls, PARAM_GRIDS.get(a.strategy, {}), data_fn=data_fn,
-                             regime_filter=rf, is_sessions=a.is_sessions, oos_sessions=a.oos_sessions)
-        symbols = sel["qualified"]
-        params_by_symbol = sel["selected_params"]
-        # honor the promotion gate: never trade a pair the committee rejected/retired or the
-        # decay monitor retired (is_blocked covers both)
-        from .monitor.registry import Registry
-        reg = Registry.load()
-        blocked = [s for s in symbols if reg.is_blocked(a.strategy, s)]
-        if blocked:
-            symbols = [s for s in symbols if s not in blocked]
-            params_by_symbol = {s: p for s, p in params_by_symbol.items() if s not in blocked}
-            print(f"excluded (committee/decay blocked): {blocked}")
-        print(f"selected universe + validated params: {params_by_symbol or '(none)'}")
-    else:
-        symbols = [s.strip().upper() for s in a.symbols.split(",") if s.strip()]
-    if not symbols:
-        raise SystemExit("no symbols to trade (selection returned empty)")
+    base_syms = [s.strip().upper() for s in a.symbols.split(",") if s.strip()]
+    reg = Registry.load()
+    # one mandate per strategy → all trade in ONE shared paper account (run_forward_multi)
+    mandates = []
+    for strat in _strategies(a):
+        strat_cls = REGISTRY[strat]
+        params_by_symbol = None
+        if a.select:
+            sel = select_symbols(base_syms, strat_cls, PARAM_GRIDS.get(strat, {}), data_fn=data_fn,
+                                 regime_filter=rf, is_sessions=a.is_sessions, oos_sessions=a.oos_sessions)
+            symbols = sel["qualified"]
+            params_by_symbol = sel["selected_params"]
+            # honor the promotion gate per strategy: skip any pair the committee rejected/retired,
+            # the decay monitor retired, or forward reconciliation flagged (is_blocked covers all)
+            blocked = [s for s in symbols if reg.is_blocked(strat, s)]
+            if blocked:
+                symbols = [s for s in symbols if s not in blocked]
+                params_by_symbol = {s: p for s, p in params_by_symbol.items() if s not in blocked}
+                print(f"[{strat}] excluded (gate-blocked): {blocked}")
+            print(f"[{strat}] selected + validated params: {params_by_symbol or '(none)'}")
+        else:
+            symbols = base_syms
+        if symbols:
+            mandates.append({"name": strat, "cls": strat_cls, "symbols": symbols,
+                             "params": params_by_symbol or {}, "regime_filter": rf})
+    if not mandates:
+        raise SystemExit("no symbols to trade (selection/gate returned empty)")
     pf = PaperPortfolio.load(PAPER_STATE)
-    res = run_forward(symbols, strat_cls, data_fn=data_fn, portfolio=pf, regime_filter=rf,
-                      params_by_symbol=params_by_symbol, max_bars=a.max_bars)
+    res = run_forward_multi(mandates, data_fn=data_fn, portfolio=pf, max_bars=a.max_bars)
     pf.save(PAPER_STATE)
+    traded = {m["name"]: m["symbols"] for m in mandates}
+    all_syms = sorted({s for ss in traded.values() for s in ss})
     from .archive.journal import Journal
     jr = Journal()
-    jr.record("paper_run", strategy=a.strategy, symbols=symbols,
-              summary=f"{res['bars_processed']} bars · equity {res['equity']} · {res['blotter_n']} total trades",
+    jr.record("paper_run", strategy=",".join(traded), symbols=all_syms,
+              summary=f"{res['bars_processed']} bars · equity {res['equity']} · {res['blotter_n']} total trades · {traded}",
               payload={"bars": res["bars_processed"], "equity": res["equity"],
-                       "open_positions": list(res["open_positions"])})
+                       "mandates": traded, "open_positions": list(res["open_positions"])})
     jr.close()
-    print(f"\n=== PAPER RUN (forward, paper-only) — {symbols} ===")
+    print(f"\n=== PAPER RUN (forward, paper-only, shared account) — {traded} ===")
     print(json.dumps({k: v for k, v in res.items() if k != "actions"}, indent=2, default=str))
     print(f"\nrecent actions ({len(res['actions'])}):")
     for act in res["actions"][-10:]:
-        print(f"  {act['ts']} {act['symbol']:6} {act['act']}" + (f"  pnl={act['pnl']:+.2f}" if "pnl" in act else f"  x{act.get('qty')}"))
+        tag = f"{act.get('strategy','') or '·'}/{act['symbol']}"
+        print(f"  {act['ts']} {tag:14} {act['act']}" + (f"  pnl={act['pnl']:+.2f}" if "pnl" in act else f"  x{act.get('qty')}"))
     print(f"\nstate persisted → {PAPER_STATE}  (run again to continue the same paper account)")
     return 0
 
@@ -275,34 +286,36 @@ def cmd_evaluate(a) -> int:
 
 
 def cmd_review(a) -> int:
-    """Committee meeting: evaluate the whole universe and write verdicts the runner honors."""
+    """Committee meeting: evaluate the whole universe — across every strategy in the basket —
+    and write the verdicts the runner honors. The committee diversifies across strategies."""
     from .council.evaluate import evaluate
     from .archive.journal import Journal
     from .monitor.registry import Registry
-    strat_cls = REGISTRY[a.strategy]
     symbols = [s.strip().upper() for s in a.symbols.split(",") if s.strip()]
     rf = RegimeFilter() if a.regime else None
     data_fn = _data_fn(a.interval, a.days)
     reg, jr = Registry.load(), Journal()
-    print(f"\n=== COMMITTEE REVIEW (universe): {a.strategy.upper()}{' +regime' if rf else ''} ===")
     icon = {"promote": "✅", "paper_watch": "⚠️", "reject": "💀", "retire": "🪦"}
-    for sym in symbols:
-        try:
-            res = evaluate(data_fn(sym), strat_cls, PARAM_GRIDS.get(a.strategy, {}), regime_filter=rf,
-                           is_sessions=a.is_sessions, oos_sessions=a.oos_sessions)
-        except Exception as e:
-            print(f"  {sym:6} error: {str(e)[:60]}"); continue
-        if res.get("error"):
-            print(f"  {sym:6} {res['error']}"); continue
-        c = res["council"]
-        reg.set_verdict(a.strategy, sym, c["decision"], c["rationale"])
-        jr.record("council_decision", strategy=a.strategy, symbols=[sym],
-                  summary=f"{sym}: {c['decision']} (conf {c['confidence']})", decision=c["rationale"],
-                  payload={"evidence": res["evidence"], "council": c})
-        print(f"  {sym:6} {icon.get(c['decision'], '')} {c['decision']:12} (conf {c['confidence']}) — {c['rationale']}")
+    for strat in _strategies(a):
+        strat_cls = REGISTRY[strat]
+        print(f"\n=== COMMITTEE REVIEW: {strat.upper()}{' +regime' if rf else ''} ===")
+        for sym in symbols:
+            try:
+                res = evaluate(data_fn(sym), strat_cls, PARAM_GRIDS.get(strat, {}), regime_filter=rf,
+                               is_sessions=a.is_sessions, oos_sessions=a.oos_sessions)
+            except Exception as e:
+                print(f"  {sym:6} error: {str(e)[:60]}"); continue
+            if res.get("error"):
+                print(f"  {sym:6} {res['error']}"); continue
+            c = res["council"]
+            reg.set_verdict(strat, sym, c["decision"], c["rationale"])
+            jr.record("council_decision", strategy=strat, symbols=[sym],
+                      summary=f"{sym}: {c['decision']} (conf {c['confidence']})", decision=c["rationale"],
+                      payload={"evidence": res["evidence"], "council": c})
+            print(f"  {sym:6} {icon.get(c['decision'], '')} {c['decision']:12} (conf {c['confidence']}) — {c['rationale']}")
+        tradeable = [s for s in symbols if reg.verdict(strat, s) in ("promote", "paper_watch")]
+        print(f"  TRADEABLE [{strat}]: {tradeable or '(none)'}")
     reg.save(); jr.close()
-    tradeable = [s for s in symbols if reg.verdict(a.strategy, s) in ("promote", "paper_watch")]
-    print(f"\n  TRADEABLE (committee-approved — the runner trades these): {tradeable or '(none)'}")
     return 0
 
 
@@ -315,28 +328,28 @@ def cmd_reconcile(a) -> int:
     from .recon.reconcile import reconcile_account
     reg, jr = Registry.load(), Journal()
     pf = PaperPortfolio.load(PAPER_STATE)
-    # reconcile the pairs the committee currently approves (or an explicit --symbols list)
-    if a.symbols:
-        symbols = [s.strip().upper() for s in a.symbols.split(",") if s.strip()]
-    else:
-        symbols = [s for s in (reg.verdict(a.strategy, k.split(":", 1)[1]) and k.split(":", 1)[1]
-                   for k in reg.data if k.startswith(f"{a.strategy}:"))
-                   if s and reg.verdict(a.strategy, s) in ("promote", "paper_watch")]
-    results = reconcile_account(pf, jr, a.strategy, symbols,
-                                min_trades=a.min_trades, drift_fraction=a.drift_fraction)
     icon = {"ok": "✅", "drift": "🚨", "insufficient_data": "·"}
-    print(f"\n=== FORWARD RECONCILIATION: {a.strategy.upper()} (realized paper vs promoted) ===")
     flagged = []
-    for r in results:
-        reg.set_forward(a.strategy, r["symbol"], r["status"], r["detail"])
-        if r["status"] == "drift":
-            flagged.append(r["symbol"])
-            jr.record("reconciliation", strategy=a.strategy, symbols=[r["symbol"]],
-                      summary=f"{r['symbol']}: DRIFT — {r['detail']}", decision="blocked (forward drift)",
-                      payload=r)
-        print(f"  {r['symbol']:6} {icon.get(r['status'], '')} {r['status']:17} "
-              f"PF {str(r['realized_pf']):>6} vs promoted {str(r['expected_pf']):>6}  "
-              f"exp {r['realized_expectancy']:+8.2f} n={r['n']}  — {r['detail']}")
+    for strat in _strategies(a):
+        # reconcile the pairs the committee currently approves (or an explicit --symbols list)
+        if a.symbols:
+            symbols = [s.strip().upper() for s in a.symbols.split(",") if s.strip()]
+        else:
+            symbols = [k.split(":", 1)[1] for k in reg.data if k.startswith(f"{strat}:")
+                       and reg.verdict(strat, k.split(":", 1)[1]) in ("promote", "paper_watch")]
+        results = reconcile_account(pf, jr, strat, symbols,
+                                    min_trades=a.min_trades, drift_fraction=a.drift_fraction)
+        print(f"\n=== FORWARD RECONCILIATION: {strat.upper()} (realized paper vs promoted) ===")
+        for r in results:
+            reg.set_forward(strat, r["symbol"], r["status"], r["detail"])
+            if r["status"] == "drift":
+                flagged.append(f"{strat}:{r['symbol']}")
+                jr.record("reconciliation", strategy=strat, symbols=[r["symbol"]],
+                          summary=f"{r['symbol']}: DRIFT — {r['detail']}", decision="blocked (forward drift)",
+                          payload=r)
+            print(f"  {r['symbol']:6} {icon.get(r['status'], '')} {r['status']:17} "
+                  f"PF {str(r['realized_pf']):>6} vs promoted {str(r['expected_pf']):>6}  "
+                  f"exp {r['realized_expectancy']:+8.2f} n={r['n']}  — {r['detail']}")
     reg.save(); jr.close()
     if flagged:
         print(f"\n  🚨 BLOCKED for forward drift (the runner will now skip these): {flagged}")

@@ -44,6 +44,7 @@
     <div id="gate"></div></section>
   <section><h2>Equity curve (forward, out-of-sample)</h2><canvas id="eq"></canvas></section>
   <section><h2>Open positions</h2><div id="positions"></div></section>
+  <section><h2>Per-strategy (forward attribution)</h2><div id="bystrat"></div></section>
   <section><h2>Per-symbol</h2><div id="bysym"></div></section>
   <section><h2>Monte-Carlo on forward trades (is the edge holding?)</h2><div id="mc"></div></section>
   <section><h2>Recent trades</h2><div id="blotter"></div></section>
@@ -88,6 +89,14 @@ async function load(){
     ["symbol","side","qty","entry","stop","target"],
     op.map(([s,p])=>[s,p.side,p.qty,fmt(p.entry),fmt(p.stop),fmt(p.target)])) :
     `<div class="mut">flat — no open positions</div>`;
+
+  // per-strategy attribution
+  const bst = Object.entries(a.by_strategy||{});
+  document.getElementById("bystrat").innerHTML = bst.length ? table(
+    ["strategy","trades","wins","win rate","net pnl"],
+    bst.map(([s,d])=>[`<b>${s}</b>`,d.trades,d.wins,d.trades?pct(d.wins/d.trades):"—",
+      `<span class="${sign(d.pnl)}">${fmt(d.pnl)}</span>`])) :
+    `<div class="mut">no trades yet</div>`;
 
   // per-symbol
   const bs = Object.entries(a.by_symbol||{});

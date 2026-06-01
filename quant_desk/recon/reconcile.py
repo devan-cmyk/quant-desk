@@ -71,7 +71,9 @@ def reconcile_account(portfolio, journal, strategy: str, symbols: list[str], **k
     callers decide what to do with the verdicts (flag the registry, journal them, print)."""
     out = []
     for sym in symbols:
-        pnls = [t["pnl"] for t in portfolio.blotter if t.get("symbol") == sym]
+        # only THIS strategy's trades on the symbol (legacy untagged trades were all 'orb')
+        pnls = [t["pnl"] for t in portfolio.blotter
+                if t.get("symbol") == sym and (t.get("strategy") or "orb") == strategy]
         exp_pf = _expected_pf_from_journal(journal, strategy, sym)
         r = reconcile_symbol(pnls, exp_pf, **kw)
         out.append({"symbol": sym, "strategy": strategy, **r})

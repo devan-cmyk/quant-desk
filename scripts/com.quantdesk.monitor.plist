@@ -14,7 +14,7 @@
   <array>
     <string>/Users/devantipler/quant-desk/.venv/bin/quant-desk</string>
     <string>monitor</string>
-    <string>--strategy</string><string>orb</string>
+    <string>--strategy</string><string>orb,meanrev</string>
     <string>--regime</string>
   </array>
   <key>WorkingDirectory</key><string>/Users/devantipler/quant-desk</string>

@@ -45,9 +45,11 @@ total return, CAGR, Sharpe, Sortino, Calmar, max drawdown, win rate, expectancy,
 factor. (Ulcer/VaR/CVaR/recovery-factor bolt onto `backtest/metrics.py` the same way.)
 
 ## Autonomous operation (scheduled launchd agents)
-The desk runs itself on a weekly research → daily paper-trade cadence. The **decision
-committee** is the promotion gate: nothing reaches the paper account it hasn't cleared, and
-approval is revoked the moment an edge decays. Install each with
+The desk runs itself on a weekly research → daily paper-trade cadence over a **basket of
+strategies** (`orb,meanrev`): the committee reviews each independently and the runner trades
+them together in one shared paper account (positions keyed `strategy:symbol`, P&L attributed
+per strategy). The **decision committee** is the promotion gate: nothing reaches the paper
+account it hasn't cleared, and approval is revoked the moment an edge decays. Install each with
 `cp scripts/<agent>.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/<agent>.plist`.
 
 | Agent | When | Does |
@@ -67,7 +69,7 @@ The gate (`monitor/registry.py: is_blocked`) blocks a pair if the committee said
 
 ## Roadmap (what bolts onto this spine, in order)
 1. More providers (Alpaca paper, Polygon) behind `DataProvider`; Redis hot cache.
-2. More strategies (VWAP pullback, ORB short, mean-reversion, RVOL momentum) via `REGISTRY`.
+2. More strategies (VWAP pullback, ORB short, RVOL momentum) via `REGISTRY` — orb + mean-reversion already run as a basket.
 3. Walk-forward + Monte Carlo + parameter sweeps in `backtest/`.
 4. Options layer: chain/Greeks/IV provider + contract-selection scorer + spread strategies.
 5. ML layer: regime classification, signal ranking (XGBoost/LightGBM) feeding the score.

@@ -61,6 +61,18 @@ class _JR:
         return [r for r in self._rows if not kind or r.get("kind") == kind][:n]
 
 
+def test_reconcile_separates_strategies_on_same_symbol():
+    # SPY traded by BOTH strategies in one account; reconcile must attribute each strategy's
+    # trades to itself (orb edge holds, meanrev drifts) — not blend them.
+    blotter = [{"symbol": "SPY", "strategy": "orb", "pnl": p} for p in [20,20,20,20,-8,-8,-8,-8]] \
+        + [{"symbol": "SPY", "strategy": "meanrev", "pnl": p} for p in [5,5,-25,-25,5,5,-12,5]]
+    jr = _JR([])
+    orb = reconcile_account(_PF(blotter), jr, "orb", ["SPY"])[0]
+    mr = reconcile_account(_PF(blotter), jr, "meanrev", ["SPY"])[0]
+    assert orb["status"] == "ok" and orb["realized_expectancy"] > 0      # orb's own trades
+    assert mr["status"] == "drift" and mr["realized_expectancy"] < 0     # meanrev's own trades
+
+
 def test_reconcile_account_pulls_expected_from_journal():
     blotter = [{"symbol": "SPY", "pnl": p} for p in [5, 5, 5, -20, -20, 5, 5, -10]] \
         + [{"symbol": "QQQ", "pnl": 10} for _ in range(8)]
