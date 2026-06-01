@@ -32,6 +32,9 @@ PARAM_GRIDS = {
     "meanrev": {"lookback": [20, 30], "entry_z": [2.0, 2.5], "stop_k": [1.0, 1.5], "min_strength": [0.0, 0.5]},
     "gapfade": {"min_gap": [0.002, 0.004], "stop_k": [1.0, 1.5]},
     # daily swing mean-reversion (validated on 1d bars with long history + larger WF folds)
+    # NB: max_vol_ratio (the volatility circuit-breaker) is intentionally NOT in this grid — it's a
+    # mandatory tail-risk control (always on, default 1.8), not optimized, because a walk-forward
+    # over a calm window would always disable it. See DailyMeanReversion.
     "dmr": {"lookback": [20, 30], "entry_z": [1.5, 2.0], "stop_k": [2.0, 3.0], "max_hold_bars": [5, 10]},
 }
 
