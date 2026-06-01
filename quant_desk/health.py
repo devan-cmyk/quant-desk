@@ -28,7 +28,7 @@ HEARTBEAT_FILE = "heartbeats.json"
 # overdue threshold (days) per scheduled command — catches an agent that silently STOPPED firing
 # (loaded but not running): weekly research +grace, weekday paper-run over a weekend, daily ops.
 CADENCE_DAYS = {"review": 9, "reconcile": 9, "monitor": 9, "allocate": 9, "refresh": 9,
-                "alerts": 9, "paper_run": 4, "backup": 2, "health": 2}
+                "alerts": 9, "paper_run": 4, "live_tick": 4, "backup": 2, "health": 2}
 
 
 def record_heartbeat(command: str, *, interval: str | None = None, state_dir: str = STATE_DIR) -> None:

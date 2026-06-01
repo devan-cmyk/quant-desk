@@ -80,7 +80,7 @@ sectors, bonds) the committee currently clears **SPY, IWM, XLK, XLP (paper_watch
 | `com.quantdesk.dmr-reconcile` | Sat 12:30 | forward drift / probation graduation for dmr pairs |
 | `com.quantdesk.dmr-monitor`   | Sat 13:00 | daily edge-decay monitor |
 | `com.quantdesk.dmr-allocate`  | Sat 13:30 | correlation-weighted risk across dmr pairs (unconditional) |
-| `com.quantdesk.dmr-paperrun`  | Weekdays 17:30 | swing paper-run — multi-day holds that persist across runs |
+| `com.quantdesk.dmr-live-tick` | Weekdays 17:30 | **real-time** forward run (replaced the replay paper-run): one decision on the day's latest complete bar, idempotent per bar, swing holds persist. Broker = local sim; `--broker alpaca` (+ `QD_ALPACA_ENABLE`/keys) routes to Alpaca paper. |
 
 The gate (`monitor/registry.py: is_blocked`) blocks a pair if the committee said
 `reject`/`retire`, the decay monitor retired it, **or** forward reconciliation flagged

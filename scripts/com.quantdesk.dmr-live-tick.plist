@@ -1,23 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- dmr forward paper runner. Weekdays 17:30 — AFTER the 5-minute paperrun (17:00) so the two
-     never race the shared paper_state.json. Paper-trades the committee-approved dmr pairs on
-     daily bars (swing: positions persist across runs, exit on stop/target/max_hold). Probation
-     sizing applies until forward-confirmed. No --regime (contrarian). Paper-only; live execution
-     stays behind the triple-lock.
-     Install: cp scripts/com.quantdesk.dmr-paperrun.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.quantdesk.dmr-paperrun.plist -->
+<!-- dmr REAL-TIME forward runner (replaces the dmr-paperrun replay). Weekdays 17:30, after the
+     close — makes ONE decision on the day's latest (now complete) bar per approved pair: manage
+     open swing positions, evaluate new entries, route through the broker. Idempotent per bar.
+     Broker = local sim (PaperBroker) by default — paper-only. To route to Alpaca PAPER instead,
+     add `--broker alpaca` here and set QD_ALPACA_ENABLE=1 + QD_ALPACA_KEY/SECRET in the agent's
+     environment; real-money (`--live`) additionally requires the live_guard triple-lock.
+     Trades only the committee-approved, non-blocked dmr pairs (the gate filters the universe).
+     Install: cp scripts/com.quantdesk.dmr-live-tick.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.quantdesk.dmr-live-tick.plist -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>com.quantdesk.dmr-paperrun</string>
+  <key>Label</key><string>com.quantdesk.dmr-live-tick</string>
   <key>ProgramArguments</key>
   <array>
     <string>/Users/devantipler/quant-desk/.venv/bin/quant-desk</string>
-    <string>paper-run</string>
+    <string>live-tick</string>
     <string>--strategy</string><string>dmr</string>
     <string>--symbols</string><string>SPY,QQQ,IWM,XLF,XLE,XLK,XLV,XLI,XLP,TLT,EEM</string>
     <string>--interval</string><string>1d</string>
     <string>--days</string><string>730</string>
-    <string>--select</string>
+    <string>--broker</string><string>sim</string>
   </array>
   <key>WorkingDirectory</key><string>/Users/devantipler/quant-desk</string>
   <key>StartCalendarInterval</key>
@@ -28,7 +30,7 @@
     <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>30</integer></dict>
     <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>30</integer></dict>
   </array>
-  <key>StandardOutPath</key><string>/Users/devantipler/quant-desk/dmr-paperrun.out.log</string>
-  <key>StandardErrorPath</key><string>/Users/devantipler/quant-desk/dmr-paperrun.err.log</string>
+  <key>StandardOutPath</key><string>/Users/devantipler/quant-desk/dmr-live-tick.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/devantipler/quant-desk/dmr-live-tick.err.log</string>
 </dict>
 </plist>
