@@ -491,6 +491,40 @@ def cmd_refresh(a) -> int:
     return 0
 
 
+def cmd_backup(a) -> int:
+    """Integrity-verified state backup / verify / restore for ~/.quant-desk."""
+    from .backup import create_backup, verify_backup, restore_backup, list_backups, verify_state
+    if a.list:
+        bks = list_backups()
+        print(f"\n=== STATE BACKUPS ({len(bks)}) ===")
+        for b in bks: print(f"  {os.path.basename(b)}  ({os.path.getsize(b)//1024} KB)")
+        return 0
+    if a.verify:
+        v = verify_backup(a.verify)
+        print(f"\n=== VERIFY {os.path.basename(a.verify)} → {'✅ RESTORABLE' if v['restorable'] else '🔴 CORRUPT'} ===")
+        for f, r in v["files"].items(): print(f"  {'✓' if r['ok'] else '✗'} {f:20} {r['detail']}")
+        return 0 if v["restorable"] else 1
+    if a.restore:
+        target = a.restore if a.restore != "latest" else (list_backups()[-1] if list_backups() else None)
+        if not target: raise SystemExit("no backups to restore")
+        r = restore_backup(target)
+        print(f"\n  ✅ restored {r['restored']} from {os.path.basename(target)}")
+        print(f"  previous state stashed → {r['previous_state_saved_to']}")
+        return 0
+    # default: create a verified backup
+    live = verify_state()
+    res = create_backup()
+    print(f"\n=== STATE BACKUP {'✅' if res['all_ok'] else '⚠️ SOURCE NOT CLEAN'} ===")
+    print(f"  archive: {os.path.basename(res['archive'])}  ({res['n_files']} files)")
+    for f, v in res["manifest"]["files"].items():
+        print(f"    {'✓' if v['ok'] else '✗'} {f:20} {v['detail']}")
+    if not res["all_ok"]:
+        print("  ⚠ live state has integrity issues — backed up anyway, rotation skipped to preserve good backups")
+    if res["rotated_out"]:
+        print(f"  rotated out {len(res['rotated_out'])} old backup(s)")
+    return 0 if res["all_ok"] else 1
+
+
 def cmd_health(a) -> int:
     """System self-diagnostics: are the agents alive, the gate fresh, state intact? Continuous
     validation of the platform's real operational invariants; --alert pages on a degraded state."""
@@ -640,6 +674,10 @@ def main() -> int:
     rf2.add_argument("--fit-sessions", type=int, default=20, dest="fit_sessions")
     rf2.add_argument("--holdout-sessions", type=int, default=5, dest="holdout_sessions")
     rf2.add_argument("--regime", action="store_true")
+    bk = sub.add_parser("backup"); bk.set_defaults(fn=cmd_backup)
+    bk.add_argument("--list", action="store_true", help="list existing backups")
+    bk.add_argument("--verify", metavar="ARCHIVE", help="verify an archive is restorable")
+    bk.add_argument("--restore", metavar="ARCHIVE|latest", help="restore state from an archive")
     he = sub.add_parser("health"); he.set_defaults(fn=cmd_health)
     he.add_argument("--alert", action="store_true", help="page (feed + notify) if not healthy")
     he.add_argument("--quiet", action="store_true", help="with --alert: record but don't notify")

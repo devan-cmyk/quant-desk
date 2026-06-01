@@ -62,6 +62,8 @@ account it hasn't cleared, and approval is revoked the moment an edge decays. In
 | `com.quantdesk.refresh`   | Wed 12:00 | **Walk-forward param refresh**: re-fits each promoted pair's params on the most recent window, adopting only refreshes that hold on a fresh holdout AND beat the deployed params. Keeps params current between reviews; never overfits (a refit that fails OOS is discarded) and never changes a verdict. |
 | `com.quantdesk.paperrun`  | Weekdays 17:00 | `paper-run --select` — paper-trades only committee-approved pairs (`is_blocked` excludes anything rejected/retired). |
 | `com.quantdesk.dashboard` | always-on (:8800) | FastAPI dashboard: account, per-strategy P&L, equity curve, **strategy gate** (kill-paths + allocation), **correlation heatmap**, gate alerts, research journal. |
+| `com.quantdesk.backup`    | daily 07:30 | **Integrity-verified state backup** of `~/.quant-desk` → checksummed tar.gz (every JSON parses, journal passes SQLite integrity_check); keeps 14; a corrupt source never rotates out a good backup. Restore: `quant-desk backup --restore latest`. |
+| `com.quantdesk.health`    | daily 08:00 | **System self-diagnostic**: agents loaded & not erroring, committee gate fresh, state intact, data cache present → `quant-desk health` / `/api/health`; pages the alert feed if degraded. |
 
 **Daily swing loop (`dmr` — daily mean-reversion).** A parallel agent set runs the same loop on
 **1-day bars** (730d history, larger walk-forward folds), offset in time so it never races the

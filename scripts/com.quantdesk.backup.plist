@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Daily integrity-verified state backup. Every day 07:30 (before the health check + market):
+     snapshot ~/.quant-desk (committee gate, audit journal, paper account, alert feed/snapshot)
+     to a checksummed tar.gz in ~/.quant-desk-backups, AFTER verifying integrity (every JSON
+     parses, journal passes SQLite integrity_check). Keeps the last 14; a corrupt source never
+     rotates out a good backup. Restore with `quant-desk backup --restore latest` (re-verifies
+     the archive and stashes current state first). Read-only w.r.t. live state.
+     Install: cp scripts/com.quantdesk.backup.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.quantdesk.backup.plist -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.quantdesk.backup</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/devantipler/quant-desk/.venv/bin/quant-desk</string>
+    <string>backup</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/devantipler/quant-desk</string>
+  <key>StartCalendarInterval</key>
+  <dict><key>Hour</key><integer>7</integer><key>Minute</key><integer>30</integer></dict>
+  <key>StandardOutPath</key><string>/Users/devantipler/quant-desk/backup.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/devantipler/quant-desk/backup.err.log</string>
+</dict>
+</plist>
