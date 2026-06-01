@@ -1,6 +1,7 @@
-"""LIVE TRADING TRIPLE-LOCK. Live execution is impossible unless ALL THREE hold:
-  1. env:    QD_ALLOW_LIVE_ENV=1                 (deliberate shell action)
-  2. config: settings.allow_live = True          (deliberate config action)
+"""LIVE TRADING LOCK. Live execution is impossible unless ALL FOUR conditions hold:
+  0. mode:    settings.trading_mode == "live"     (default is "paper")
+  1. env:     QD_ALLOW_LIVE_ENV=1                  (deliberate shell action)
+  2. config:  settings.allow_live = True           (deliberate config action)
   3. runtime: unlock_token == settings.live_unlock_token (non-empty, passed at call time)
 Any live broker MUST call assert_live_allowed() before sending an order. The paper broker
 never trades live, so it never needs this. Default posture: paper-only, fail-secure."""
