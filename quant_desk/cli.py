@@ -176,7 +176,14 @@ def cmd_monitor(a) -> int:
             print("\n  ⚡ STATUS CHANGES since last run:")
             for c in changes:
                 print(f"     {c['symbol']}: {c['from']} → {c['to']}")
-        print(f"\n  ACTIVE (paper runner trades these): {reg.active(strat) or '(none)'}")
+        # decay-health is NOT the trade gate: the runner trades committee-approved, non-blocked
+        # pairs (and sizes probationary ones down). Show both so the display can't mislead.
+        tradeable = [s for s in symbols
+                     if reg.verdict(strat, s) in ("promote", "paper_watch") and not reg.is_blocked(strat, s)]
+        print(f"\n  DECAY-HEALTHY (not retired by this monitor): {reg.active(strat) or '(none)'}")
+        print(f"  RUNNER TRADES (committee-approved + not blocked): {tradeable or '(none)'}"
+              + (f"  · probation (half size): {[s for s in tradeable if not reg.is_confirmed(strat, s)]}"
+                 if tradeable else ""))
     reg.save(); jr.close()
     return 0
 
