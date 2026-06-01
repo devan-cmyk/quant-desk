@@ -13,6 +13,7 @@ turning the platform's silent failure modes into observable, actionable signals.
 """
 from __future__ import annotations
 
+import datetime as dt
 import glob
 import json
 import os
@@ -23,6 +24,50 @@ import time
 REPO_DIR = os.path.expanduser("~/quant-desk")
 STATE_DIR = os.path.expanduser("~/.quant-desk")
 STALE_GATE_DAYS = 9.0       # committee review runs weekly; older than this ⇒ stale gate
+HEARTBEAT_FILE = "heartbeats.json"
+# overdue threshold (days) per scheduled command — catches an agent that silently STOPPED firing
+# (loaded but not running): weekly research +grace, weekday paper-run over a weekend, daily ops.
+CADENCE_DAYS = {"review": 9, "reconcile": 9, "monitor": 9, "allocate": 9, "refresh": 9,
+                "alerts": 9, "paper_run": 4, "backup": 2, "health": 2}
+
+
+def record_heartbeat(command: str, *, interval: str | None = None, state_dir: str = STATE_DIR) -> None:
+    """Record that `command` just completed successfully. Keyed by command(:interval) so the
+    5-minute and daily (1d) loops are tracked separately. Best-effort — never raises."""
+    try:
+        from .storage import atomic_write_json
+        p = os.path.join(state_dir, HEARTBEAT_FILE)
+        hb = {}
+        if os.path.exists(p):
+            with open(p) as f:
+                hb = json.load(f)
+        key = f"{command}:{interval}" if interval and interval != "-" else command
+        hb[key] = {"ts": dt.datetime.now(dt.timezone.utc).isoformat(), "command": command}
+        atomic_write_json(p, hb)
+    except Exception:
+        pass
+
+
+def _heartbeats(state_dir: str) -> dict:
+    p = os.path.join(state_dir, HEARTBEAT_FILE)
+    if not os.path.exists(p):
+        return _check("agent_heartbeats", True, "info", "no heartbeats yet (agents haven't run)")
+    try:
+        with open(p) as f:
+            hb = json.load(f)
+    except Exception as e:
+        return _check("agent_heartbeats", True, "info", f"unreadable ({str(e)[:30]})")
+    now = dt.datetime.now(dt.timezone.utc)
+    overdue = []
+    for key, rec in hb.items():
+        cad = CADENCE_DAYS.get(rec.get("command"))
+        if cad is None:
+            continue
+        age = (now - dt.datetime.fromisoformat(rec["ts"])).total_seconds() / 86400
+        if age > cad:
+            overdue.append(f"{key} ({age:.1f}d>{cad})")
+    return _check("agent_heartbeats", not overdue, "warn",
+                  f"STOPPED/overdue: {overdue}" if overdue else f"{len(hb)} agents reporting on cadence")
 
 
 def _check(name, ok, severity, detail):
@@ -105,7 +150,7 @@ def _data_cache() -> dict:
 
 
 def system_health(*, repo_dir: str = REPO_DIR, state_dir: str = STATE_DIR) -> dict:
-    checks = [_agents_loaded(), _agent_errors(repo_dir), *_registry(state_dir),
+    checks = [_agents_loaded(), _agent_errors(repo_dir), _heartbeats(state_dir), *_registry(state_dir),
               _journal(state_dir), _paper_state(state_dir), _data_cache()]
     crit = [c for c in checks if not c["ok"] and c["severity"] == "critical"]
     warn = [c for c in checks if not c["ok"] and c["severity"] in ("high", "warn")]

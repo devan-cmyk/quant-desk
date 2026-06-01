@@ -48,6 +48,23 @@ def test_stale_gate_flagged_degraded(tmp_path):
     assert h["status"] in ("degraded", "critical")
 
 
+def test_heartbeat_detects_a_stopped_agent(tmp_path):
+    import json, time, datetime as dt
+    from quant_desk.health import record_heartbeat, system_health
+    sd, rd = str(tmp_path / "state"), str(tmp_path / "repo")
+    _healthy_state(sd, rd)
+    # a fresh heartbeat (paper_run just ran) and a stale one (review stopped 20 days ago)
+    record_heartbeat("paper_run", interval="1d", state_dir=sd)
+    hb_path = os.path.join(sd, "heartbeats.json")
+    hb = json.load(open(hb_path))
+    old = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=20)).isoformat()
+    hb["review:1d"] = {"ts": old, "command": "review"}
+    json.dump(hb, open(hb_path, "w"))
+    chk = next(c for c in system_health(repo_dir=rd, state_dir=sd)["checks"] if c["name"] == "agent_heartbeats")
+    assert not chk["ok"] and "review:1d" in chk["detail"]      # the stopped agent is flagged
+    assert "paper_run" not in chk["detail"]                    # the live one is not
+
+
 def test_agent_stderr_flagged(tmp_path):
     sd, rd = str(tmp_path / "state"), str(tmp_path / "repo")
     _healthy_state(sd, rd)

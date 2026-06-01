@@ -706,7 +706,14 @@ def main() -> int:
     ss.add_argument("--ruin", type=float, default=0.25); ss.add_argument("--regime", action="store_true")
     a = ap.parse_args()
     configure(settings.log_level)
-    return a.fn(a)
+    rc = a.fn(a)
+    # record a success heartbeat for scheduled commands → health can detect a stopped agent
+    if rc in (0, None):
+        from .health import record_heartbeat, CADENCE_DAYS
+        cmd = a.fn.__name__[4:] if a.fn.__name__.startswith("cmd_") else a.fn.__name__
+        if cmd in CADENCE_DAYS:
+            record_heartbeat(cmd, interval=getattr(a, "interval", None))
+    return rc
 
 
 if __name__ == "__main__":
