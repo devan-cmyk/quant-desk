@@ -93,6 +93,17 @@ def decide(evidence: dict) -> dict:
         else:
             decision, why = "paper_watch", "mixed verdict — paper-trade and monitor"
 
+        # EDGE-QUALITY CEILING: the committee can never be MORE bullish than the edge analyst.
+        # RiskOfficer and Contrarian judge risk and overfit — not whether an edge EXISTS — so
+        # they may only downgrade, never rescue a thin/negative-OOS strategy into a tradeable
+        # state. Stops a no-edge pair (Quant rejects on non-positive OOS, or says paper_watch on
+        # a sub-1.3 profit factor) from being promoted/traded on risk grounds alone.
+        rank = {"reject": 0, "paper_watch": 1, "promote": 2}
+        qvote = next(v["vote"] for v in votes if v["agent"] == "QuantResearch")
+        if rank[decision] > rank[qvote]:
+            decision = qvote
+            why = f"capped by edge quality — QuantResearch: {qvote} ({votes[1]['reasons'][-1]})"
+
     conf = round(sum(v["confidence"] for v in votes) / len(votes), 2)
     dissent = [v["agent"] for v in votes if (v["vote"] == "reject") != (decision in ("reject", "retire"))]
     return {"decision": decision, "rationale": why, "confidence": conf,

@@ -44,3 +44,27 @@ def test_negative_oos_not_promoted():
     d = committee.decide(_ev(walkforward={"oos_return": -0.01, "profit_factor": 0.8}))
     assert d["decision"] in ("reject", "paper_watch")
     assert d["decision"] != "promote"
+
+
+def test_sub_threshold_profit_factor_cannot_be_promoted():
+    # the meanrev:NVDA case: positive OOS but PF 1.12 < 1.3 → Quant says paper_watch.
+    # Risk-clean evidence used to let RiskOfficer + Contrarian outvote to 'promote'; the
+    # edge-quality ceiling now caps it at paper_watch.
+    d = committee.decide(_ev(walkforward={"oos_return": 0.002, "sharpe": 0.7,
+                                          "profit_factor": 1.12, "num_trades": 42}))
+    assert d["decision"] == "paper_watch"
+    assert "edge quality" in d["rationale"]
+
+
+def test_losing_oos_is_capped_to_reject_not_traded():
+    # the meanrev:AAPL case: negative OOS (PF 0.39) → Quant rejects. Even with clean risk and no
+    # overfit tells, it must NOT land on paper_watch (which the runner trades) — cap to reject.
+    d = committee.decide(_ev(walkforward={"oos_return": -0.007, "sharpe": -0.3,
+                                          "profit_factor": 0.39, "num_trades": 30}))
+    assert d["decision"] == "reject"
+
+
+def test_genuine_edge_still_promotes():
+    # a real edge (PF 1.5, positive OOS → Quant promotes) is untouched by the ceiling
+    d = committee.decide(_ev(walkforward={"oos_return": 0.0027, "profit_factor": 1.5, "num_trades": 29}))
+    assert d["decision"] == "promote"
