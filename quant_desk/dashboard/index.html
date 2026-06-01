@@ -13,32 +13,34 @@
   * { box-sizing:border-box; } html,body{ height:100%; }
   body { margin:0; background:var(--bg); color:var(--txt); overflow-x:hidden;
       font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif; }
-  /* WebGL scene sits behind everything; a soft vignette keeps text legible over it */
+  /* WebGL scene sits behind everything; a light vignette keeps text legible over it */
   #bg { position:fixed; inset:0; width:100%; height:100%; z-index:0; display:block; }
   body::after { content:""; position:fixed; inset:0; z-index:1; pointer-events:none;
-      background:radial-gradient(120% 90% at 50% -10%, transparent 40%, rgba(7,10,16,.55) 100%); }
+      background:radial-gradient(130% 100% at 50% -10%, transparent 55%, rgba(7,10,16,.35) 100%); }
   .wrap { position:relative; z-index:2; max-width:1100px; margin:0 auto; padding:24px;
       perspective:1400px; }
   .banner { background:rgba(29,43,29,.55); border:1px solid #2ea04340; color:var(--grn);
             backdrop-filter:blur(10px); padding:9px 14px; border-radius:10px; font-weight:600;
             margin-bottom:20px; box-shadow:0 0 24px #2ea04318; }
-  h1 { font-size:26px; margin:0 0 2px; letter-spacing:-.01em;
-       background:linear-gradient(90deg,#e6edf3,#58a6ff); -webkit-background-clip:text;
-       background-clip:text; -webkit-text-fill-color:transparent; }
+  h1 { font-size:30px; margin:0 0 2px; letter-spacing:-.01em; font-weight:800;
+       background:linear-gradient(90deg,#e6edf3,#58a6ff 70%,#3fb950); -webkit-background-clip:text;
+       background-clip:text; -webkit-text-fill-color:transparent;
+       filter:drop-shadow(0 0 22px rgba(88,166,255,.45)); }
   .sub { color:var(--mut); margin-bottom:20px; }
   .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:20px; }
   /* glassmorphic panels — translucent, blurred, with an accent edge-glow */
-  .card, section { background:rgba(var(--card),.62);
-      border:1px solid rgba(88,166,255,.14); border-radius:14px;
-      backdrop-filter:blur(16px) saturate(135%); -webkit-backdrop-filter:blur(16px) saturate(135%);
-      box-shadow:0 8px 30px rgba(0,0,0,.40), inset 0 1px 0 rgba(255,255,255,.04);
+  .card, section { background:rgba(var(--card),.42);
+      border:1px solid rgba(88,166,255,.28); border-radius:14px;
+      backdrop-filter:blur(18px) saturate(150%); -webkit-backdrop-filter:blur(18px) saturate(150%);
+      box-shadow:0 8px 34px rgba(0,0,0,.45), 0 0 24px rgba(88,166,255,.10),
+                 inset 0 1px 0 rgba(255,255,255,.06);
       transition:transform .18s cubic-bezier(.2,.7,.2,1), box-shadow .25s, border-color .25s;
       will-change:transform; }
   .card { padding:16px; }
   section { padding:18px; margin-bottom:20px; }
-  .card:hover, section:hover { border-color:rgba(88,166,255,.40);
-      box-shadow:0 14px 50px rgba(0,0,0,.5), 0 0 36px rgba(88,166,255,.14),
-                 inset 0 1px 0 rgba(255,255,255,.06); }
+  .card:hover, section:hover { border-color:rgba(88,166,255,.70);
+      box-shadow:0 18px 60px rgba(0,0,0,.55), 0 0 60px rgba(88,166,255,.30),
+                 inset 0 1px 0 rgba(255,255,255,.09); }
   .card .l { color:var(--mut); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
   .card .v { font-size:24px; font-weight:700; margin-top:4px; font-variant-numeric:tabular-nums;
              text-shadow:0 0 18px rgba(88,166,255,.18); }
@@ -100,22 +102,22 @@ const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 100)
 camera.position.z = 14;
 
 // particle field
-const N = 1800, pos = new Float32Array(N*3);
-for(let i=0;i<N*3;i++) pos[i] = (Math.random()-0.5) * 46;
+const N = 3200, pos = new Float32Array(N*3);
+for(let i=0;i<N*3;i++) pos[i] = (Math.random()-0.5) * 50;
 const pg = new THREE.BufferGeometry();
 pg.setAttribute('position', new THREE.BufferAttribute(pos,3));
-const pm = new THREE.PointsMaterial({ size:0.06, color:0x58a6ff, transparent:true,
-  opacity:0.85, blending:THREE.AdditiveBlending, depthWrite:false });
+const pm = new THREE.PointsMaterial({ size:0.10, color:0x58a6ff, transparent:true,
+  opacity:1.0, blending:THREE.AdditiveBlending, depthWrite:false });
 const points = new THREE.Points(pg, pm); scene.add(points);
 
 // flowing wireframe shell around the field
 const shell = new THREE.Mesh(
   new THREE.IcosahedronGeometry(11, 2),
-  new THREE.MeshBasicMaterial({ color:0x58a6ff, wireframe:true, transparent:true, opacity:0.06 }));
+  new THREE.MeshBasicMaterial({ color:0x58a6ff, wireframe:true, transparent:true, opacity:0.16 }));
 scene.add(shell);
 const knot = new THREE.Mesh(
-  new THREE.TorusKnotGeometry(3.4, 0.5, 160, 20),
-  new THREE.MeshBasicMaterial({ color:0x58a6ff, wireframe:true, transparent:true, opacity:0.10 }));
+  new THREE.TorusKnotGeometry(3.6, 0.6, 200, 24),
+  new THREE.MeshBasicMaterial({ color:0x58a6ff, wireframe:true, transparent:true, opacity:0.28 }));
 scene.add(knot);
 
 const mouse = {x:0,y:0}, target = {x:0,y:0};
@@ -138,8 +140,8 @@ function frame(){
   points.rotation.y = t*0.6; points.rotation.x = t*0.25;
   shell.rotation.y = -t*0.4; shell.rotation.x = t*0.2;
   knot.rotation.z = t*0.8; knot.rotation.x = t*0.5;
-  camera.position.x += (mouse.x*4 - camera.position.x)*0.05;
-  camera.position.y += (-mouse.y*4 - camera.position.y)*0.05;
+  camera.position.x += (mouse.x*7 - camera.position.x)*0.05;
+  camera.position.y += (-mouse.y*7 - camera.position.y)*0.05;
   camera.lookAt(0,0,0);
   cur.lerp(moodColor(), 0.03); pm.color.copy(cur); shell.material.color.copy(cur); knot.material.color.copy(cur);
   renderer.render(scene, camera);
