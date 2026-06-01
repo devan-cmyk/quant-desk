@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Forward paper-trading runner. Runs weekdays at 17:00 local (after US market close in
+     ET/CT) to process the day's new bars, re-select the qualified universe, and grow the
+     persistent paper account (~/.quant-desk/paper_state.json). PAPER ONLY — no live broker
+     is wired and any future one must pass execution.live_guard. --max-bars 0 = process all
+     new bars since last run (incremental via last_ts).
+     Install:
+       cp scripts/com.quantdesk.paperrun.plist ~/Library/LaunchAgents/
+       launchctl load ~/Library/LaunchAgents/com.quantdesk.paperrun.plist -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.quantdesk.paperrun</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/devantipler/quant-desk/.venv/bin/quant-desk</string>
+    <string>paper-run</string>
+    <string>--strategy</string><string>orb</string>
+    <string>--regime</string>
+    <string>--select</string>
+    <string>--max-bars</string><string>0</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/devantipler/quant-desk</string>
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>0</integer></dict>
+  </array>
+  <key>StandardOutPath</key><string>/Users/devantipler/quant-desk/paperrun.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/devantipler/quant-desk/paperrun.err.log</string>
+</dict>
+</plist>
