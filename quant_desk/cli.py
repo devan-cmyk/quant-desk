@@ -136,6 +136,34 @@ def cmd_select(a) -> int:
     return 0
 
 
+def cmd_monitor(a) -> int:
+    from .monitor.decay import monitor_universe
+    from .monitor.registry import Registry
+    strat_cls = REGISTRY[a.strategy]
+    symbols = [s.strip().upper() for s in a.symbols.split(",") if s.strip()]
+    rf = RegimeFilter() if a.regime else None
+    assessments = monitor_universe(symbols, strat_cls, PARAM_GRIDS.get(a.strategy, {}),
+                                   data_fn=_data_fn(a.interval, a.days), regime_filter=rf,
+                                   is_sessions=a.is_sessions, oos_sessions=a.oos_sessions)
+    reg = Registry.load()
+    changes = reg.update(a.strategy, assessments)
+    reg.save()
+    icon = {"healthy": "✅", "watch": "⚠️", "retired": "💀", "insufficient_data": "·", "error": "✗"}
+    num = lambda v, p: (format(v, p) if v is not None else "—")
+    print(f"\n=== EDGE-DECAY MONITOR: {a.strategy.upper()}{' +regime' if rf else ''} ===")
+    print(f"  {'symbol':8} {'status':16} {'recent OOS':>11} {'trend':>9} {'all-OOS':>9}")
+    for r in assessments:
+        label = f"{icon.get(r['status'], '')} {r['status']}"
+        print(f"  {r['symbol']:8} {label:16} {num(r.get('recent_mean'), '+.4f'):>11} "
+              f"{num(r.get('trend'), '+.5f'):>9} {num(r.get('oos_return'), '+.4f'):>9}")
+    if changes:
+        print("\n  ⚡ STATUS CHANGES since last run:")
+        for c in changes:
+            print(f"     {c['symbol']}: {c['from']} → {c['to']}")
+    print(f"\n  ACTIVE (paper runner trades these): {reg.active(a.strategy) or '(none)'}")
+    return 0
+
+
 def cmd_stress(a) -> int:
     from .stress.lab import stress_test
     strat_cls = REGISTRY[a.strategy]
@@ -164,6 +192,14 @@ def cmd_paper_run(a) -> int:
                              regime_filter=rf, is_sessions=a.is_sessions, oos_sessions=a.oos_sessions)
         symbols = sel["qualified"]
         params_by_symbol = sel["selected_params"]
+        # honor the edge-decay registry: never trade a symbol the monitor has retired
+        from .monitor.registry import Registry
+        reg = Registry.load()
+        retired = [s for s in symbols if reg.is_retired(a.strategy, s)]
+        if retired:
+            symbols = [s for s in symbols if s not in retired]
+            params_by_symbol = {s: p for s, p in params_by_symbol.items() if s not in retired}
+            print(f"excluded (edge decayed/retired): {retired}")
         print(f"selected universe + validated params: {params_by_symbol or '(none)'}")
     else:
         symbols = [s.strip().upper() for s in a.symbols.split(",") if s.strip()]
@@ -237,6 +273,13 @@ def main() -> int:
     pr.add_argument("--max-bars", type=int, default=78, dest="max_bars", help="forward bars to process")
     db = sub.add_parser("dashboard"); db.set_defaults(fn=cmd_dashboard)
     db.add_argument("--host", default="127.0.0.1"); db.add_argument("--port", type=int, default=8800)
+    mo = sub.add_parser("monitor"); mo.set_defaults(fn=cmd_monitor)
+    mo.add_argument("--symbols", default="SPY,QQQ,IWM,AAPL,NVDA,MSFT")
+    mo.add_argument("--strategy", default="orb"); mo.add_argument("--interval", default="5m")
+    mo.add_argument("--days", type=int, default=58)
+    mo.add_argument("--is-sessions", type=int, default=15, dest="is_sessions")
+    mo.add_argument("--oos-sessions", type=int, default=5, dest="oos_sessions")
+    mo.add_argument("--regime", action="store_true")
     ss = sub.add_parser("stress"); ss.set_defaults(fn=cmd_stress)
     ss.add_argument("--symbol", default="SPY"); ss.add_argument("--strategy", default="orb")
     ss.add_argument("--interval", default="5m"); ss.add_argument("--days", type=int, default=30)
