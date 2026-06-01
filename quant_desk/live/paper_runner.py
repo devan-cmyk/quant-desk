@@ -109,7 +109,7 @@ def run_forward_multi(mandates: list[dict], *, data_fn: Callable[[str], pd.DataF
                             if held >= strat_inst.max_hold_bars:
                                 exit_price, reason = float(bar["close"]), "max_hold"
                     if exit_price is not None:
-                        f = broker.fill("sell" if p["side"] == "long" else "buy", p["qty"], exit_price)
+                        f = broker.fill("sell" if p["side"] == "long" else "buy", p["qty"], exit_price, symbol=sym)
                         pnl = portfolio.close(key, f.fill_price, f.commission, ts, reason)
                         risk.on_trade_closed(pnl)
                         actions.append({"ts": ts.isoformat(), "symbol": sym, "strategy": name,
@@ -127,7 +127,7 @@ def run_forward_multi(mandates: list[dict], *, data_fn: Callable[[str], pd.DataF
                                             risk_scale=md["scales"].get(sym, 1.0))
                         notional = dec.qty * float(bar["close"])
                         if dec.allowed and (portfolio.gross_exposure(marks) + notional) <= max_gross * risk.equity:
-                            f = broker.fill("buy" if sig.side == "long" else "sell", dec.qty, float(bar["close"]))
+                            f = broker.fill("buy" if sig.side == "long" else "sell", dec.qty, float(bar["close"]), symbol=sym)
                             portfolio.open(sym, sig.side, dec.qty, f.fill_price, f.commission,
                                            float(sig.stop), float(sig.target), ts, strategy=name)
                             actions.append({"ts": ts.isoformat(), "symbol": sym, "strategy": name,

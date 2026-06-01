@@ -26,7 +26,9 @@ class PaperBroker:
         self.commission_per_share = (settings.risk.commission_per_share
                                      if commission_per_share is None else commission_per_share)
 
-    def fill(self, side: str, qty: int, ref_price: float) -> Fill:
+    def fill(self, side: str, qty: int, ref_price: float, symbol: str | None = None) -> Fill:
+        # symbol is ignored by the local sim (it only marks ref_price); accepted so the broker
+        # surface matches AlpacaBroker, which needs the symbol to route a real order.
         sign = 1.0 if side == "buy" else -1.0          # buys slip up, sells slip down
         fill_price = ref_price * (1 + sign * self.slippage_bps / 1e4)
         commission = self.commission_per_share * qty

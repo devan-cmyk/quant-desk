@@ -95,7 +95,9 @@ The gate (`monitor/registry.py: is_blocked`) blocks a pair if the committee said
 3. Walk-forward + Monte Carlo + parameter sweeps in `backtest/`.
 4. Options layer: chain/Greeks/IV provider + contract-selection scorer + spread strategies.
 5. ML layer: regime classification, signal ranking (XGBoost/LightGBM) feeding the score.
-6. Live broker adapter (Alpaca **paper** first) implementing `fill()` + calling `live_guard`.
+6. ✅ Alpaca broker adapter — `execution/alpaca_broker.py` implements `fill()` against Alpaca's
+   REST API (paper endpoint default), off unless `QD_ALPACA_ENABLE=1`, live routing inherits the
+   `live_guard` triple-lock. Foundation only — a real-time event loop (vs the current replay) is the next step.
 7. Postgres persistence (signals/fills/backtests), Prometheus/Grafana, FastAPI dashboard.
 8. The 5-agent LLM research council (research → peer review → chairman → backtest queue),
    which can propose/rank/queue but **cannot** trade live or relax risk limits.
