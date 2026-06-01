@@ -65,6 +65,16 @@ class Registry:
     def verdict(self, strategy: str, symbol: str) -> str | None:
         return (self.data.get(f"{strategy}:{symbol}") or {}).get("verdict")
 
+    def set_params(self, strategy: str, symbol: str, params: dict) -> None:
+        """The committee-validated params behind the verdict (walk-forward best params)."""
+        key = f"{strategy}:{symbol}"
+        e = self.data.get(key, {})
+        e["params"] = dict(params or {})
+        self.data[key] = e
+
+    def params(self, strategy: str, symbol: str) -> dict:
+        return (self.data.get(f"{strategy}:{symbol}") or {}).get("params") or {}
+
     # ── forward/backtest reconciliation (live truth vs the promoted backtest) ──
     def set_forward(self, strategy: str, symbol: str, status: str, detail: str = "") -> None:
         import datetime as _dt

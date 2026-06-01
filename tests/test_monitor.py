@@ -67,6 +67,18 @@ def test_decay_update_preserves_verdict_and_forward(tmp_path):
     assert reg.data["orb:SPY"]["status"] == "healthy" # and decay status was written
 
 
+def test_validated_params_persist_and_survive_decay_update(tmp_path):
+    p = str(tmp_path / "reg.json")
+    reg = Registry(path=p)
+    reg.set_verdict("orb", "SPY", "promote", "validated")
+    reg.set_params("orb", "SPY", {"or_minutes": 30, "target_r": 2.0})
+    # the decay monitor (update) must not clobber the validated params
+    reg.update("orb", [{"symbol": "SPY", "status": "healthy", "recent_mean": 0.01}])
+    reg.save()
+    assert Registry.load(p).params("orb", "SPY") == {"or_minutes": 30, "target_r": 2.0}
+    assert reg.params("orb", "MSFT") == {}            # unknown pair → empty (backtest uses defaults)
+
+
 def test_monitor_universe_runs(multi_session):
     res = monitor_universe(["AAA", "BBB"], OpeningRangeBreakout,
                            {"or_minutes": [30], "target_r": [1.5, 2.0]},

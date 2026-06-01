@@ -283,7 +283,8 @@ def cmd_evaluate(a) -> int:
               decision=c["rationale"], payload={"evidence": ev, "council": c})
     jr.close()
     from .monitor.registry import Registry
-    reg = Registry.load(); reg.set_verdict(a.strategy, a.symbol, c["decision"], c["rationale"]); reg.save()
+    reg = Registry.load(); reg.set_verdict(a.strategy, a.symbol, c["decision"], c["rationale"])
+    reg.set_params(a.strategy, a.symbol, ev.get("params", {})); reg.save()
     print("\n  → verdict recorded to the registry + journal (the runner now honors it)")
     return 0
 
@@ -312,6 +313,7 @@ def cmd_review(a) -> int:
                 print(f"  {sym:6} {res['error']}"); continue
             c = res["council"]
             reg.set_verdict(strat, sym, c["decision"], c["rationale"])
+            reg.set_params(strat, sym, res["evidence"].get("params", {}))
             jr.record("council_decision", strategy=strat, symbols=[sym],
                       summary=f"{sym}: {c['decision']} (conf {c['confidence']})", decision=c["rationale"],
                       payload={"evidence": res["evidence"], "council": c})
@@ -379,8 +381,13 @@ def cmd_allocate(a) -> int:
                 and not reg.is_blocked(strat, k.split(":", 1)[1])]
         for sym in syms:
             try:
-                res = run_backtest(data_fn(sym), strat_cls(), RiskEngine(), regime_filter=rf)
+                # backtest each edge with its COMMITTEE-VALIDATED params (walk-forward best),
+                # so the correlation reflects the edge as actually promoted (falls back to defaults)
+                params = reg.params(strat, sym)
+                res = run_backtest(data_fn(sym), strat_cls(**params), RiskEngine(), regime_filter=rf)
                 returns_by_pair[f"{strat}:{sym}"] = session_returns(res["trades"])
+                if params:
+                    print(f"  {strat}:{sym:6} params {params}")
             except Exception as e:
                 print(f"  {strat}:{sym} backtest error: {str(e)[:50]}")
     if not returns_by_pair:
