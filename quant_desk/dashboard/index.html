@@ -148,10 +148,12 @@ function moodColor(){ const r=window.__qdReturn||0;
 // adaptive performance guard: pause when the tab is hidden, and if the frame rate
 // sustains below 40fps after warmup, drop bloom + supersampling (the heaviest cost).
 // Append ?lowfps=1 to the URL to force the degraded path (for testing on any machine).
-let t=0, raf=0, running=true, frames=0, fpsT=performance.now();
-let degraded = new URLSearchParams(location.search).get('lowfps') === '1';
+let t=0, raf=0, running=true, frames=0, fpsT=performance.now(), goodSecs=0;
+const forcedLow = new URLSearchParams(location.search).get('lowfps') === '1';
+let degraded = forcedLow;
 if(degraded) renderer.setPixelRatio(1);
 const startT = performance.now();
+const fullDPR = Math.min(devicePixelRatio, 2);
 document.addEventListener('visibilitychange', ()=>{
   if(document.hidden){ running=false; cancelAnimationFrame(raf); }
   else if(!running){ running=true; fpsT=performance.now(); frames=0; frame(); }
@@ -160,8 +162,13 @@ function frame(){
   raf = requestAnimationFrame(frame);
   frames++; const now=performance.now();
   if(now-fpsT>=1000){ const fps=frames*1000/(now-fpsT); frames=0; fpsT=now;
-    if(!degraded && now-startT>2500 && fps<40){ degraded=true; renderer.setPixelRatio(1);
-      console.info('quant-desk: reduced WebGL quality (low FPS)'); } }
+    if(!degraded && now-startT>2500 && fps<40){ degraded=true; goodSecs=0; renderer.setPixelRatio(1);
+      console.info('quant-desk: reduced WebGL quality (low FPS)'); }
+    // recovery hysteresis: restore full quality once FPS holds >55 for 3s (not if forced)
+    else if(degraded && !forcedLow){ goodSecs = fps>55 ? goodSecs+1 : 0;
+      if(goodSecs>=3){ degraded=false; renderer.setPixelRatio(fullDPR);
+        composer.setSize(innerWidth, innerHeight);   // rebuild bloom targets at full DPR
+        console.info('quant-desk: restored full WebGL quality'); } } }
   t += reduce ? 0 : 0.0016;
   mouse.x += (target.x-mouse.x)*0.04; mouse.y += (target.y-mouse.y)*0.04;
   points.rotation.y = t*0.6; points.rotation.x = t*0.25;
