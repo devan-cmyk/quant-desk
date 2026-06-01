@@ -77,6 +77,23 @@ def gate() -> dict:
             "n_blocked": sum(r["blocked"] for r in rows), "n_total": len(rows)}
 
 
+@app.get("/api/allocation")
+def allocation() -> dict:
+    """The latest portfolio allocation: correlation matrix + per-pair weights/risk scales,
+    as journaled by `quant-desk allocate`. Drives the dashboard heatmap."""
+    from ..archive.journal import Journal
+    jr = Journal()
+    rows = jr.recent(1, kind="allocation")
+    jr.close()
+    if not rows:
+        return {"present": False}
+    r = rows[0]
+    p = r.get("payload") or {}
+    return {"present": True, "ts": r["ts"], "method": r.get("decision"),
+            "n_obs": p.get("n_obs"), "weights": p.get("weights", {}),
+            "scales": p.get("scales", {}), "corr": p.get("corr", {})}
+
+
 @app.get("/api/alerts")
 def alerts(n: int = 20) -> dict:
     from ..alerts.gate_alerts import AlertFeed

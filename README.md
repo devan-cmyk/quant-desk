@@ -60,7 +60,7 @@ account it hasn't cleared, and approval is revoked the moment an edge decays. In
 | `com.quantdesk.allocate`  | Sat 10:30 | Measures the **correlation** of the approved edges' return streams and sets a diversification-aware per-pair **risk weight** the runner sizes against (risk-parity + correlation penalty; not a return optimizer). |
 | `com.quantdesk.alerts`    | Sat 11:00 | Diffs the gate vs the last snapshot and **alerts** on every pair that flipped TRADING↔BLOCKED or was newly approved — to a feed (dashboard reads it) + a macOS notification. External webhook off unless `QD_ALERT_WEBHOOK` is set. |
 | `com.quantdesk.paperrun`  | Weekdays 17:00 | `paper-run --select` — paper-trades only committee-approved pairs (`is_blocked` excludes anything rejected/retired). |
-| `com.quantdesk.dashboard` | always-on (:8800) | FastAPI dashboard: account, equity curve, **strategy gate** (all three kill-paths per pair), research journal. |
+| `com.quantdesk.dashboard` | always-on (:8800) | FastAPI dashboard: account, per-strategy P&L, equity curve, **strategy gate** (kill-paths + allocation), **correlation heatmap**, gate alerts, research journal. |
 
 The gate (`monitor/registry.py: is_blocked`) blocks a pair if the committee said
 `reject`/`retire`, the decay monitor retired it, **or** forward reconciliation flagged

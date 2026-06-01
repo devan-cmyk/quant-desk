@@ -52,3 +52,22 @@ def test_gate_surfaces_the_three_kill_paths(tmp_path, monkeypatch):
     assert by["QQQ"]["blocked"] is True and by["QQQ"]["forward"] == "drift"   # drift blocks
     assert by["AAPL"]["blocked"] is True and by["AAPL"]["decay"] == "retired" # decay blocks
     assert g["n_blocked"] == 2 and g["tradeable"] == ["SPY"]
+
+
+def test_allocation_endpoint_serves_latest_correlation(tmp_path, monkeypatch):
+    from quant_desk.archive.journal import Journal
+    from quant_desk.dashboard.app import allocation
+    monkeypatch.setenv("QD_JOURNAL", str(tmp_path / "j.db"))
+    assert allocation()["present"] is False                 # nothing journaled yet
+    jr = Journal()
+    jr.record("allocation", strategy="orb", symbols=["orb:SPY", "orb:QQQ"],
+              decision="inverse-vol × diversification penalty",
+              payload={"n_obs": 58, "weights": {"orb:SPY": 0.6, "orb:QQQ": 0.4},
+                       "scales": {"orb:SPY": 1.2, "orb:QQQ": 0.8},
+                       "corr": {"orb:SPY": {"orb:SPY": 1.0, "orb:QQQ": 0.84},
+                                "orb:QQQ": {"orb:SPY": 0.84, "orb:QQQ": 1.0}}})
+    jr.close()
+    a = allocation()
+    assert a["present"] and a["n_obs"] == 58
+    assert a["corr"]["orb:SPY"]["orb:QQQ"] == 0.84          # the matrix the heatmap renders
+    assert a["scales"]["orb:SPY"] == 1.2

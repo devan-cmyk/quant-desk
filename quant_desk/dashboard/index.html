@@ -43,6 +43,9 @@
   <section><h2>Strategy gate — what the runner is allowed to trade <span class="mut" id="gatesum"></span></h2>
     <div class="mut" style="margin-bottom:10px;font-size:12px">Three independent kill-paths feed one gate: the committee <b>verdict</b>, the decay monitor <b>decay</b>, and forward <b>reconciliation</b>. A pair trades only when none of them block it.</div>
     <div id="gate"></div></section>
+  <section id="corrsec" style="display:none"><h2>Portfolio correlation (approved edges) <span class="mut" id="corrsum"></span></h2>
+    <div class="mut" style="margin-bottom:10px;font-size:12px">How correlated the promoted edges' return streams are. <span style="color:var(--red)">Red</span> = redundant (move together → trimmed); <span style="color:var(--acc)">blue</span> = diversifying (move apart → boosted). The allocator sizes each pair's risk accordingly.</div>
+    <div id="corr" style="overflow-x:auto"></div></section>
   <section><h2>Equity curve (forward, out-of-sample)</h2><canvas id="eq"></canvas></section>
   <section><h2>Open positions</h2><div id="positions"></div></section>
   <section><h2>Per-strategy (forward attribution)</h2><div id="bystrat"></div></section>
@@ -186,7 +189,37 @@ async function loadAlerts(){
     }).join("");
   } catch(e){ document.getElementById("alertsec").style.display="none"; }
 }
-load(); loadAlerts(); loadGate(); loadJournal();
-setInterval(()=>{load();loadAlerts();loadGate();loadJournal();}, 30000);
+function corrColor(v){           // +1 redundant → red, -1/0 diversifying → blue
+  if(v==null) return "transparent";
+  return v>=0 ? `rgba(248,81,73,${(v*0.85).toFixed(2)})` : `rgba(88,166,255,${(-v*0.85).toFixed(2)})`;
+}
+async function loadAllocation(){
+  try{
+    const a = await (await fetch("/api/allocation")).json();
+    const corr = a.corr||{}; const pairs = Object.keys(corr);
+    document.getElementById("corrsec").style.display = (a.present && pairs.length>1) ? "" : "none";
+    if(!a.present || pairs.length<2) return;
+    document.getElementById("corrsum").textContent =
+      `· ${a.method||""} · ${a.n_obs||0} sessions`;
+    const short = p => p.length>12 ? p.slice(0,12) : p;
+    let h = `<table style="font-size:12px"><thead><tr><th></th>`
+      + pairs.map(p=>`<th class="right" title="${p}">${short(p)}</th>`).join("")
+      + `<th class="right">wt</th><th class="right">risk×</th></tr></thead><tbody>`;
+    for(const r of pairs){
+      h += `<tr><td title="${r}"><b>${short(r)}</b></td>`;
+      for(const c of pairs){
+        const v = corr[r][c];
+        const diag = r===c;
+        h += `<td class="right" style="background:${diag?'#1f2733':corrColor(v)};color:${Math.abs(v)>0.5&&!diag?'#fff':'var(--txt)'}">${v==null?'—':v.toFixed(2)}</td>`;
+      }
+      const w=(a.weights||{})[r], s=(a.scales||{})[r];
+      h += `<td class="right">${w==null?'—':(w*100).toFixed(0)+'%'}</td>`
+         + `<td class="right ${s>1?'pos':s<1?'neg':''}">${s==null?'—':s+'×'}</td></tr>`;
+    }
+    document.getElementById("corr").innerHTML = h + `</tbody></table>`;
+  } catch(e){ document.getElementById("corrsec").style.display="none"; }
+}
+load(); loadAlerts(); loadGate(); loadAllocation(); loadJournal();
+setInterval(()=>{load();loadAlerts();loadGate();loadAllocation();loadJournal();}, 30000);
 </script>
 </div></body></html>
