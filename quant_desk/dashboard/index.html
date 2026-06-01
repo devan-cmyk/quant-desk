@@ -145,9 +145,20 @@ function moodColor(){ const r=window.__qdReturn||0;
   const t=Math.max(-1,Math.min(1, r*60));   // ~±1.7% saturates the tint
   return t>=0 ? cNeutral.clone().lerp(cUp,t) : cNeutral.clone().lerp(cDown,-t); }
 
-let t=0;
+// adaptive performance guard: pause when the tab is hidden, and if the frame rate
+// sustains below 40fps after warmup, drop bloom + supersampling (the heaviest cost).
+let t=0, raf=0, running=true, degraded=false, frames=0, fpsT=performance.now();
+const startT = performance.now();
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden){ running=false; cancelAnimationFrame(raf); }
+  else if(!running){ running=true; fpsT=performance.now(); frames=0; frame(); }
+});
 function frame(){
-  requestAnimationFrame(frame);
+  raf = requestAnimationFrame(frame);
+  frames++; const now=performance.now();
+  if(now-fpsT>=1000){ const fps=frames*1000/(now-fpsT); frames=0; fpsT=now;
+    if(!degraded && now-startT>2500 && fps<40){ degraded=true; renderer.setPixelRatio(1);
+      console.info('quant-desk: reduced WebGL quality (low FPS)'); } }
   t += reduce ? 0 : 0.0016;
   mouse.x += (target.x-mouse.x)*0.04; mouse.y += (target.y-mouse.y)*0.04;
   points.rotation.y = t*0.6; points.rotation.x = t*0.25;
@@ -165,7 +176,8 @@ function frame(){
   bloom.strength = reduce ? 0.8 : Math.max(0.2, 0.9 + heartbeat + conviction + burst);
   const scale = 1 + (reduce ? 0 : 0.04*Math.sin(t*9));          // subtle breathing of the knot
   knot.scale.setScalar(scale);
-  composer.render();
+  if(degraded) renderer.render(scene, camera);   // bypass bloom when GPU-constrained
+  else composer.render();
 }
 frame();
 </script>
