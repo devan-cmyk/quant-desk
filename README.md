@@ -53,13 +53,17 @@ approval is revoked the moment an edge decays. Install each with
 | Agent | When | Does |
 |---|---|---|
 | `com.quantdesk.review`    | Sat 09:00 | Convenes the committee over the universe (walk-forward + Monte-Carlo + stress lab + decay), writes each **promote/paper_watch/reject/retire** verdict to the registry + append-only journal. |
+| `com.quantdesk.reconcile` | Sat 09:30 | Compares each approved pair's **realized forward paper edge** against the profit factor it was promoted on; flags **drift** (edge absent live) — the feedback loop that catches overfit validation missed. |
 | `com.quantdesk.monitor`   | Sat 10:00 | Re-assesses rolling out-of-sample health, **auto-retires** decayed symbols in the registry. |
 | `com.quantdesk.paperrun`  | Weekdays 17:00 | `paper-run --select` — paper-trades only committee-approved pairs (`is_blocked` excludes anything rejected/retired). |
 | `com.quantdesk.dashboard` | always-on (:8800) | FastAPI account + research-journal dashboard. |
 
 The gate (`monitor/registry.py: is_blocked`) blocks a pair if the committee said
-`reject`/`retire` **or** the decay monitor retired it. Run the gate by hand anytime:
-`quant-desk review --strategy orb --symbols SPY,QQQ,IWM,AAPL,NVDA,MSFT --regime`.
+`reject`/`retire`, the decay monitor retired it, **or** forward reconciliation flagged
+`drift`. Three independent kill-paths, one gate. Run them by hand anytime:
+`quant-desk review --strategy orb --symbols SPY,QQQ,IWM,AAPL,NVDA,MSFT --regime` then
+`quant-desk reconcile --strategy orb`. State is env-overridable for isolated runs
+(`QD_REGISTRY`, `QD_JOURNAL`, `QD_PAPER_STATE`).
 
 ## Roadmap (what bolts onto this spine, in order)
 1. More providers (Alpaca paper, Polygon) behind `DataProvider`; Redis hot cache.

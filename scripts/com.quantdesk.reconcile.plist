@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Weekly forward/backtest reconciliation. Saturdays 09:30 local (after the committee review
+     at 09:00, before the decay monitor at 10:00): compare each committee-approved pair's
+     REALIZED forward paper edge against the profit factor it was promoted on. A pair whose
+     live edge fails to show up (net-negative expectancy, or profit factor collapsed well below
+     the promoted level) is flagged 'drift' in ~/.quant-desk/registry.json and recorded to the
+     append-only journal. The daily paper runner (paper-run --select) then skips it via
+     is_blocked — live truth overrides the backtest. Read-only research; paper-only system.
+     Install:
+       cp scripts/com.quantdesk.reconcile.plist ~/Library/LaunchAgents/
+       launchctl load ~/Library/LaunchAgents/com.quantdesk.reconcile.plist -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.quantdesk.reconcile</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/devantipler/quant-desk/.venv/bin/quant-desk</string>
+    <string>reconcile</string>
+    <string>--strategy</string><string>orb</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/devantipler/quant-desk</string>
+  <key>StartCalendarInterval</key>
+  <dict><key>Weekday</key><integer>6</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>30</integer></dict>
+  <key>StandardOutPath</key><string>/Users/devantipler/quant-desk/reconcile.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/devantipler/quant-desk/reconcile.err.log</string>
+</dict>
+</plist>

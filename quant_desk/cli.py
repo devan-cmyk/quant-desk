@@ -108,7 +108,7 @@ def cmd_multisymbol(a) -> int:
     return 0
 
 
-PAPER_STATE = os.path.expanduser("~/.quant-desk/paper_state.json")
+PAPER_STATE = os.environ.get("QD_PAPER_STATE") or os.path.expanduser("~/.quant-desk/paper_state.json")
 
 
 def _data_fn(interval, days):
@@ -306,6 +306,45 @@ def cmd_review(a) -> int:
     return 0
 
 
+def cmd_reconcile(a) -> int:
+    """Forward/backtest reconciliation: does each promoted pair's REALIZED paper edge match
+    what the committee promoted it on? Drift (edge absent live) blocks the pair via the gate."""
+    from .archive.journal import Journal
+    from .monitor.registry import Registry
+    from .live.portfolio import PaperPortfolio
+    from .recon.reconcile import reconcile_account
+    reg, jr = Registry.load(), Journal()
+    pf = PaperPortfolio.load(PAPER_STATE)
+    # reconcile the pairs the committee currently approves (or an explicit --symbols list)
+    if a.symbols:
+        symbols = [s.strip().upper() for s in a.symbols.split(",") if s.strip()]
+    else:
+        symbols = [s for s in (reg.verdict(a.strategy, k.split(":", 1)[1]) and k.split(":", 1)[1]
+                   for k in reg.data if k.startswith(f"{a.strategy}:"))
+                   if s and reg.verdict(a.strategy, s) in ("promote", "paper_watch")]
+    results = reconcile_account(pf, jr, a.strategy, symbols,
+                                min_trades=a.min_trades, drift_fraction=a.drift_fraction)
+    icon = {"ok": "✅", "drift": "🚨", "insufficient_data": "·"}
+    print(f"\n=== FORWARD RECONCILIATION: {a.strategy.upper()} (realized paper vs promoted) ===")
+    flagged = []
+    for r in results:
+        reg.set_forward(a.strategy, r["symbol"], r["status"], r["detail"])
+        if r["status"] == "drift":
+            flagged.append(r["symbol"])
+            jr.record("reconciliation", strategy=a.strategy, symbols=[r["symbol"]],
+                      summary=f"{r['symbol']}: DRIFT — {r['detail']}", decision="blocked (forward drift)",
+                      payload=r)
+        print(f"  {r['symbol']:6} {icon.get(r['status'], '')} {r['status']:17} "
+              f"PF {str(r['realized_pf']):>6} vs promoted {str(r['expected_pf']):>6}  "
+              f"exp {r['realized_expectancy']:+8.2f} n={r['n']}  — {r['detail']}")
+    reg.save(); jr.close()
+    if flagged:
+        print(f"\n  🚨 BLOCKED for forward drift (the runner will now skip these): {flagged}")
+    else:
+        print("\n  no drift — every promoted pair's live edge matches its backtest.")
+    return 0
+
+
 def cmd_journal(a) -> int:
     from .archive.journal import Journal
     jr = Journal()
@@ -386,6 +425,11 @@ def main() -> int:
     ev.add_argument("--is-sessions", type=int, default=15, dest="is_sessions")
     ev.add_argument("--oos-sessions", type=int, default=5, dest="oos_sessions")
     ev.add_argument("--regime", action="store_true")
+    rc = sub.add_parser("reconcile"); rc.set_defaults(fn=cmd_reconcile)
+    rc.add_argument("--strategy", default="orb")
+    rc.add_argument("--symbols", default=None, help="default: every committee-approved pair")
+    rc.add_argument("--min-trades", type=int, default=8, dest="min_trades")
+    rc.add_argument("--drift-fraction", type=float, default=0.6, dest="drift_fraction")
     rv = sub.add_parser("review"); rv.set_defaults(fn=cmd_review)
     rv.add_argument("--symbols", default="SPY,QQQ,IWM,AAPL,NVDA,MSFT")
     rv.add_argument("--strategy", default="orb"); rv.add_argument("--interval", default="5m")

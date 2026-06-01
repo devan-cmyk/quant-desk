@@ -62,8 +62,22 @@ class Registry:
     def verdict(self, strategy: str, symbol: str) -> str | None:
         return (self.data.get(f"{strategy}:{symbol}") or {}).get("verdict")
 
+    # ── forward/backtest reconciliation (live truth vs the promoted backtest) ──
+    def set_forward(self, strategy: str, symbol: str, status: str, detail: str = "") -> None:
+        import datetime as _dt
+        key = f"{strategy}:{symbol}"
+        e = self.data.get(key, {})
+        e.update({"forward": status, "forward_detail": detail,
+                  "forward_ts": _dt.datetime.now(_dt.timezone.utc).isoformat()})
+        self.data[key] = e
+
+    def forward(self, strategy: str, symbol: str) -> str | None:
+        return (self.data.get(f"{strategy}:{symbol}") or {}).get("forward")
+
     def is_blocked(self, strategy: str, symbol: str) -> bool:
-        """True if the runner must NOT trade this pair — the committee rejected/retired it, or
-        the decay monitor retired it. The promotion gate for forward paper trading."""
+        """True if the runner must NOT trade this pair — the committee rejected/retired it, the
+        decay monitor retired it, or forward reconciliation flagged drift (the promoted edge
+        failed to show up live). The promotion gate for forward paper trading."""
         e = self.data.get(f"{strategy}:{symbol}") or {}
-        return e.get("verdict") in ("reject", "retire") or e.get("status") == "retired"
+        return (e.get("verdict") in ("reject", "retire") or e.get("status") == "retired"
+                or e.get("forward") == "drift")
