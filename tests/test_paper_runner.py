@@ -58,6 +58,35 @@ def test_legacy_single_strategy_blotter_untagged_is_back_compatible(two_sessions
     assert all(t["strategy"] == "" for t in pf.blotter)     # untagged, as before
 
 
+def test_swing_position_persists_across_runs_and_caps_at_max_hold():
+    # a swing strategy (intraday=False) must hold its position ACROSS incremental runs and only
+    # exit after max_hold_bars — not get EOD-flattened like an intraday strategy.
+    import numpy as np, pandas as pd
+    from quant_desk.strategies.base import Strategy, Signal
+
+    class _SwingOnce(Strategy):
+        name = "sw"; intraday = False
+        def __init__(self, max_hold_bars=4): self.max_hold_bars = max_hold_bars
+        def compute_signal(self, w):
+            # fire only on the very first bar of history (stateless) so it never re-enters later
+            if len(w) > 1: return Signal()
+            return Signal("long", stop=1.0, target=1e9, strength=1.0)   # stop/target never hit
+
+    idx = pd.date_range("2024-01-02", periods=8, freq="B", tz="UTC")
+    c = np.linspace(100, 100.7, 8)
+    df = pd.DataFrame({"open": c, "high": c + 0.1, "low": c - 0.1, "close": c, "volume": 1e6}, index=idx)
+    mandates = [{"name": "sw", "cls": _SwingOnce, "symbols": ["AAA"], "params": {}}]
+    pf = PaperPortfolio(start_equity=100_000, cash=100_000)
+
+    # run 1: only the first 3 bars exist → enters and is STILL HOLDING (not flattened)
+    r1 = run_forward_multi(mandates, data_fn=lambda s: df.iloc[:3], portfolio=pf, limits=_limits())
+    assert len(pf.positions) == 1 and r1["blotter_n"] == 0      # held across the run, no exit
+
+    # run 2: the rest of the bars arrive → exits at max_hold_bars (4 bars after entry)
+    r2 = run_forward_multi(mandates, data_fn=lambda s: df, portfolio=pf, limits=_limits())
+    assert len(pf.positions) == 0 and pf.blotter[-1]["reason"] == "max_hold"
+
+
 def test_paper_run_is_incremental(two_sessions):
     pf = PaperPortfolio(start_equity=100_000, cash=100_000)
     run_forward(["AAA"], OpeningRangeBreakout, data_fn=lambda s: two_sessions,

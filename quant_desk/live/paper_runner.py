@@ -85,6 +85,7 @@ def run_forward_multi(mandates: list[dict], *, data_fn: Callable[[str], pd.DataF
                 marks[sym] = float(bar["close"])
                 session_last = (i == len(df) - 1) or (df.index[i + 1].tz_convert(ET).date() != d_et)
                 key = f"{name}:{sym}" if name else sym
+                strat_inst = md["strat"][sym]
 
                 # 1. manage an open position (this mandate's own position on the symbol)
                 if key in portfolio.positions:
@@ -96,8 +97,17 @@ def run_forward_multi(mandates: list[dict], *, data_fn: Callable[[str], pd.DataF
                     else:
                         if bar["high"] >= p["stop"]: exit_price, reason = p["stop"], "stop"
                         elif bar["low"] <= p["target"]: exit_price, reason = p["target"], "target"
-                    if exit_price is None and session_last:
-                        exit_price, reason = float(bar["close"]), "eod"
+                    if exit_price is None:
+                        if strat_inst.intraday:
+                            if session_last:                  # intraday: never hold past the close
+                                exit_price, reason = float(bar["close"]), "eod"
+                        elif strat_inst.max_hold_bars:        # swing: persists across runs; cap the hold
+                            try:
+                                held = i - df.index.get_loc(pd.Timestamp(p["entry_ts"]))
+                            except KeyError:                  # entry fell out of the data window → exit
+                                held = strat_inst.max_hold_bars
+                            if held >= strat_inst.max_hold_bars:
+                                exit_price, reason = float(bar["close"]), "max_hold"
                     if exit_price is not None:
                         f = broker.fill("sell" if p["side"] == "long" else "buy", p["qty"], exit_price)
                         pnl = portfolio.close(key, f.fill_price, f.commission, ts, reason)
@@ -105,10 +115,11 @@ def run_forward_multi(mandates: list[dict], *, data_fn: Callable[[str], pd.DataF
                         actions.append({"ts": ts.isoformat(), "symbol": sym, "strategy": name,
                                         "act": f"close/{reason}", "pnl": round(pnl, 2)})
 
-                # 2. open a new position
-                if key not in portfolio.positions and not session_last:
+                # 2. open a new position — intraday: not on the close; swing: any bar (it carries over)
+                allow_entry = (not strat_inst.intraday) or (not session_last)
+                if key not in portfolio.positions and allow_entry:
                     window = df.iloc[: i + 1]
-                    sig = md["strat"][sym].generate_signal(window)
+                    sig = strat_inst.generate_signal(window)
                     if sig.side in ("long", "short") and rf and not rf.allows(window, sig.side):
                         continue
                     if sig.side in ("long", "short") and sig.stop is not None:
