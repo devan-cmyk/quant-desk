@@ -238,6 +238,39 @@ def cmd_paper_run(a) -> int:
     return 0
 
 
+def cmd_evaluate(a) -> int:
+    from .council.evaluate import evaluate
+    from .archive.journal import Journal
+    strat_cls = REGISTRY[a.strategy]
+    df = YFinanceProvider().bars(a.symbol, interval=a.interval, lookback_days=a.days)
+    rf = RegimeFilter() if a.regime else None
+    res = evaluate(df, strat_cls, PARAM_GRIDS.get(a.strategy, {}), regime_filter=rf,
+                   is_sessions=a.is_sessions, oos_sessions=a.oos_sessions)
+    if res.get("error"):
+        raise SystemExit(res["error"])
+    ev, c = res["evidence"], res["council"]
+    print(f"\n=== COMMITTEE REVIEW: {a.strategy.upper()} on {a.symbol}{' +regime' if rf else ''} ===")
+    w, mc, st = ev["walkforward"], ev["montecarlo"], ev["stress"]
+    print(f"  evidence: OOS {w['oos_return']:+.2%} ({w['num_trades']} trades, PF "
+          f"{w['profit_factor']}) · MC ruin {mc['prob_ruin']} · stress survives_all={st['survived_all']} "
+          f"· decay {ev['decay'].get('status')}")
+    print("  deliberation:")
+    for v in c["votes"]:
+        print(f"    {v['agent']:14} → {v['vote']:12} ({v['confidence']:.2f})  {'; '.join(v['reasons'])}")
+    verdict = {"promote": "✅ PROMOTE", "paper_watch": "⚠️ PAPER-WATCH", "reject": "💀 REJECT",
+               "retire": "🪦 RETIRE"}.get(c["decision"], c["decision"])
+    print(f"\n  CHAIRMAN: {verdict}  (confidence {c['confidence']})  —  {c['rationale']}")
+    if c["dissent"]:
+        print(f"  dissent: {c['dissent']}")
+    jr = Journal()
+    jr.record("council_decision", strategy=a.strategy, symbols=[a.symbol],
+              summary=f"{a.symbol}: {c['decision']} (conf {c['confidence']})",
+              decision=c["rationale"], payload={"evidence": ev, "council": c})
+    jr.close()
+    print("\n  → recorded to the research journal (auditable promotion decision)")
+    return 0
+
+
 def cmd_journal(a) -> int:
     from .archive.journal import Journal
     jr = Journal()
@@ -312,6 +345,12 @@ def main() -> int:
     db.add_argument("--host", default="127.0.0.1"); db.add_argument("--port", type=int, default=8800)
     jo = sub.add_parser("journal"); jo.set_defaults(fn=cmd_journal)
     jo.add_argument("-n", type=int, default=40); jo.add_argument("--kind", default=None)
+    ev = sub.add_parser("evaluate"); ev.set_defaults(fn=cmd_evaluate)
+    ev.add_argument("--symbol", default="SPY"); ev.add_argument("--strategy", default="orb")
+    ev.add_argument("--interval", default="5m"); ev.add_argument("--days", type=int, default=58)
+    ev.add_argument("--is-sessions", type=int, default=15, dest="is_sessions")
+    ev.add_argument("--oos-sessions", type=int, default=5, dest="oos_sessions")
+    ev.add_argument("--regime", action="store_true")
     mo = sub.add_parser("monitor"); mo.set_defaults(fn=cmd_monitor)
     mo.add_argument("--symbols", default="SPY,QQQ,IWM,AAPL,NVDA,MSFT")
     mo.add_argument("--strategy", default="orb"); mo.add_argument("--interval", default="5m")
