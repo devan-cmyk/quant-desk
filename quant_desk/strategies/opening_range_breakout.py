@@ -17,16 +17,17 @@ ET = "America/New_York"
 class OpeningRangeBreakout(Strategy):
     name = "orb"
 
-    def __init__(self, or_minutes: int = 30, target_r: float = 2.0):
+    def __init__(self, or_minutes: int = 30, target_r: float = 2.0, min_strength: float = 0.0):
         self.or_minutes = or_minutes
         self.target_r = target_r
+        self.min_strength = min_strength
         self._session = None
         self._signaled = False
 
     def initialize(self, ctx=None) -> None:
         self._session, self._signaled = None, False
 
-    def generate_signal(self, window: pd.DataFrame) -> Signal:
+    def compute_signal(self, window: pd.DataFrame) -> Signal:
         if len(window) < 2:
             return Signal()
         idx_et = window.index.tz_convert(ET)

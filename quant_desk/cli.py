@@ -25,9 +25,11 @@ log = get("cli")
 
 # parameter search grids per strategy (used by walk-forward optimization)
 PARAM_GRIDS = {
+    # min_strength is the conviction filter — the committee picks it out-of-sample, so the system
+    # itself decides whether trading fewer, higher-conviction setups beats taking everything.
     "orb": {"or_minutes": [15, 30], "target_r": [1.5, 2.0, 3.0]},
-    "vwap": {"target_r": [1.0, 1.5, 2.0], "touch": [0.0005, 0.001]},
-    "meanrev": {"lookback": [20, 30], "entry_z": [2.0, 2.5], "stop_k": [1.0, 1.5]},
+    "vwap": {"target_r": [1.0, 1.5, 2.0], "touch": [0.0005, 0.001], "min_strength": [0.0, 0.4]},
+    "meanrev": {"lookback": [20, 30], "entry_z": [2.0, 2.5], "stop_k": [1.0, 1.5], "min_strength": [0.0, 0.5]},
     "gapfade": {"min_gap": [0.002, 0.004], "stop_k": [1.0, 1.5]},
 }
 

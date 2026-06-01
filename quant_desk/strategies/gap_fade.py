@@ -22,17 +22,19 @@ ET = "America/New_York"
 class GapFade(Strategy):
     name = "gapfade"
 
-    def __init__(self, min_gap: float = 0.003, entry_minutes: int = 15, stop_k: float = 1.0):
+    def __init__(self, min_gap: float = 0.003, entry_minutes: int = 15, stop_k: float = 1.0,
+                 min_strength: float = 0.0):
         self.min_gap = min_gap
         self.entry_minutes = entry_minutes
         self.stop_k = stop_k
+        self.min_strength = min_strength
         self._session = None
         self._signaled = False
 
     def initialize(self, ctx=None) -> None:
         self._session, self._signaled = None, False
 
-    def generate_signal(self, window: pd.DataFrame) -> Signal:
+    def compute_signal(self, window: pd.DataFrame) -> Signal:
         if len(window) < 2:
             return Signal()
         idx_et = window.index.tz_convert(ET)

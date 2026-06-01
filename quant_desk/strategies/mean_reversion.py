@@ -13,12 +13,14 @@ from .base import Signal, Strategy
 class MeanReversion(Strategy):
     name = "meanrev"
 
-    def __init__(self, lookback: int = 20, entry_z: float = 2.0, stop_k: float = 1.0):
+    def __init__(self, lookback: int = 20, entry_z: float = 2.0, stop_k: float = 1.0,
+                 min_strength: float = 0.0):
         self.lookback = lookback
         self.entry_z = entry_z
         self.stop_k = stop_k
+        self.min_strength = min_strength
 
-    def generate_signal(self, window: pd.DataFrame) -> Signal:
+    def compute_signal(self, window: pd.DataFrame) -> Signal:
         if len(window) < self.lookback + 1:
             return Signal()
         c = window["close"]
@@ -28,12 +30,15 @@ class MeanReversion(Strategy):
             return Signal()
         close = float(c.iloc[-1])
         z = (close - ma) / sd
+        # conviction = how far BEYOND the entry threshold (0 at entry_z, 1.0 at 2×entry_z), so the
+        # min_strength filter can distinguish a shallow trigger from a deep, higher-odds extreme.
+        conviction = min((abs(z) - self.entry_z) / self.entry_z, 1.0)
         if z <= -self.entry_z:                         # oversold → revert up
             stop = close - self.stop_k * sd
-            return Signal("long", stop=stop, target=ma, strength=min(abs(z) / self.entry_z, 1.0),
+            return Signal("long", stop=stop, target=ma, strength=conviction,
                           reason="mean reversion (oversold)")
         if z >= self.entry_z:                          # overbought → revert down
             stop = close + self.stop_k * sd
-            return Signal("short", stop=stop, target=ma, strength=min(abs(z) / self.entry_z, 1.0),
+            return Signal("short", stop=stop, target=ma, strength=conviction,
                           reason="mean reversion (overbought)")
         return Signal()

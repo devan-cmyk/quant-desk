@@ -18,13 +18,14 @@ class VWAPPullback(Strategy):
     name = "vwap"
 
     def __init__(self, target_r: float = 1.5, touch: float = 0.0007,
-                 stop_buf: float = 0.0005, min_bars: int = 6):
+                 stop_buf: float = 0.0005, min_bars: int = 6, min_strength: float = 0.0):
         self.target_r = target_r
         self.touch = touch          # how near VWAP the bar's low/high must come
         self.stop_buf = stop_buf
         self.min_bars = min_bars
+        self.min_strength = min_strength
 
-    def generate_signal(self, window: pd.DataFrame) -> Signal:
+    def compute_signal(self, window: pd.DataFrame) -> Signal:
         idx_et = window.index.tz_convert(ET)
         session = idx_et[-1].date()
         today = window[idx_et.date == session]

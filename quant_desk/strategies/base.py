@@ -26,13 +26,23 @@ class Signal:
 
 class Strategy(ABC):
     name: str = "base"
+    min_strength: float = 0.0      # conviction filter: drop signals weaker than this (0 = off)
 
     def initialize(self, ctx: dict | None = None) -> None:
         """Reset per-run state."""
 
-    @abstractmethod
     def generate_signal(self, window: pd.DataFrame) -> Signal:
-        """Given OHLCV history up to and including the current bar, emit a Signal.
+        """Public entry: compute the raw signal, then apply the conviction filter — a research
+        knob (committee-tunable) that makes a strategy SELECTIVE, taking only its higher-conviction
+        setups. Fewer, better trades survive costs better than many marginal ones."""
+        sig = self.compute_signal(window)
+        if sig.side in ("long", "short") and sig.strength < self.min_strength:
+            return Signal()
+        return sig
+
+    @abstractmethod
+    def compute_signal(self, window: pd.DataFrame) -> Signal:
+        """Given OHLCV history up to and including the current bar, emit a raw Signal.
         Return Signal(side='flat') to do nothing."""
 
     def exit_logic(self, window: pd.DataFrame, entry: dict) -> bool:
