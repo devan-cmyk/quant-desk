@@ -87,6 +87,18 @@ class Registry:
     def forward(self, strategy: str, symbol: str) -> str | None:
         return (self.data.get(f"{strategy}:{symbol}") or {}).get("forward")
 
+    def is_confirmed(self, strategy: str, symbol: str) -> bool:
+        """True once forward reconciliation has CONFIRMED the edge live ('ok'). Until then a
+        promoted pair is on probation — it trades, but small, because its forward edge is
+        unproven (or it has never been reconciled)."""
+        return self.forward(strategy, symbol) == "ok"
+
+    def effective_scale(self, strategy: str, symbol: str, probation_factor: float = 0.5) -> float:
+        """The risk scale the runner actually uses: the allocator's weight, reduced while the
+        pair is on probation (not yet forward-confirmed). Full size only after it survives live."""
+        base = self.risk_scale(strategy, symbol)
+        return round(base * (1.0 if self.is_confirmed(strategy, symbol) else probation_factor), 3)
+
     # ── portfolio allocation (diversification-aware per-pair risk weight) ──────
     def set_allocation(self, strategy: str, symbol: str, weight: float, scale: float) -> None:
         import datetime as _dt

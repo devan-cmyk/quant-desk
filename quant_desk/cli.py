@@ -220,8 +220,12 @@ def cmd_paper_run(a) -> int:
         else:
             symbols = base_syms
         if symbols:
-            # apply the portfolio allocator's per-pair risk scale (1.0 if never allocated)
-            scales = {s: reg.risk_scale(strat, s) for s in symbols}
+            # allocator weight × probation factor: a promoted pair trades at half size until its
+            # forward edge is CONFIRMED (survives live); full size only after it earns it
+            scales = {s: reg.effective_scale(strat, s) for s in symbols}
+            probation = [s for s in symbols if not reg.is_confirmed(strat, s)]
+            if probation:
+                print(f"[{strat}] on probation (half size until forward-confirmed): {probation}")
             mandates.append({"name": strat, "cls": strat_cls, "symbols": symbols,
                              "params": params_by_symbol or {}, "regime_filter": rf,
                              "risk_scales": scales})
@@ -329,7 +333,7 @@ def cmd_reconcile(a) -> int:
     from .recon.reconcile import reconcile_account
     reg, jr = Registry.load(), Journal()
     pf = PaperPortfolio.load(PAPER_STATE)
-    icon = {"ok": "✅", "drift": "🚨", "insufficient_data": "·"}
+    icon = {"ok": "✅", "drift": "🚨", "probation": "🌱", "insufficient_data": "·"}
     flagged = []
     for strat in _strategies(a):
         # reconcile the pairs the committee currently approves (or an explicit --symbols list)
@@ -342,13 +346,17 @@ def cmd_reconcile(a) -> int:
                                     min_trades=a.min_trades, drift_fraction=a.drift_fraction)
         print(f"\n=== FORWARD RECONCILIATION: {strat.upper()} (realized paper vs promoted) ===")
         for r in results:
-            reg.set_forward(strat, r["symbol"], r["status"], r["detail"])
+            # ok = forward-confirmed (graduates to full size); probation = not enough live
+            # evidence yet (trades small); drift = forward edge absent (blocked by is_blocked)
+            fwd = "probation" if r["status"] == "insufficient_data" else r["status"]
+            reg.set_forward(strat, r["symbol"], fwd, r["detail"])
             if r["status"] == "drift":
                 flagged.append(f"{strat}:{r['symbol']}")
                 jr.record("reconciliation", strategy=strat, symbols=[r["symbol"]],
                           summary=f"{r['symbol']}: DRIFT — {r['detail']}", decision="blocked (forward drift)",
                           payload=r)
-            print(f"  {r['symbol']:6} {icon.get(r['status'], '')} {r['status']:17} "
+            label = "confirmed" if fwd == "ok" else fwd
+            print(f"  {r['symbol']:6} {icon.get(fwd, '·')} {label:17} "
                   f"PF {str(r['realized_pf']):>6} vs promoted {str(r['expected_pf']):>6}  "
                   f"exp {r['realized_expectancy']:+8.2f} n={r['n']}  — {r['detail']}")
     reg.save(); jr.close()

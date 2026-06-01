@@ -143,7 +143,7 @@ function pill(val, kind){
   if(val==null) return `<span class="pill off">—</span>`;
   const cls = {promote:"go",paper_watch:"warn",reject:"kill",retire:"kill",
                healthy:"go",watch:"warn",retired:"kill",
-               ok:"go",drift:"kill",insufficient_data:"off"}[val] || "off";
+               ok:"go",drift:"kill",probation:"warn",insufficient_data:"off"}[val] || "off";
   return `<span class="pill ${cls}">${val}</span>`;
 }
 async function loadGate(){
