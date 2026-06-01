@@ -18,11 +18,15 @@ class Registry:
     @classmethod
     def load(cls, path: str | None = None) -> "Registry":
         p = path or os.environ.get("QD_REGISTRY") or os.path.expanduser("~/.quant-desk/registry.json")
-        return cls(json.load(open(p)), p) if os.path.exists(p) else cls(path=p)
+        if not os.path.exists(p):
+            return cls(path=p)
+        with open(p) as f:
+            return cls(json.load(f), p)
 
     def save(self) -> None:
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
-        json.dump(self.data, open(self.path, "w"), indent=2)
+        with open(self.path, "w") as f:
+            json.dump(self.data, f, indent=2)
 
     def update(self, strategy: str, assessments: list[dict]) -> list[dict]:
         """Record the latest assessments; return the status-change events since last run."""

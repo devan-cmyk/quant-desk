@@ -75,10 +75,12 @@ class PaperPortfolio:
     # ── persistence ──────────────────────────────────────────────────────────
     def save(self, path: str):
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        json.dump(asdict(self), open(path, "w"), indent=2)
+        with open(path, "w") as f:
+            json.dump(asdict(self), f, indent=2)
 
     @classmethod
     def load(cls, path: str, start_equity: float = 100_000.0) -> "PaperPortfolio":
         if os.path.exists(path):
-            return cls(**json.load(open(path)))
+            with open(path) as f:
+                return cls(**json.load(f))
         return cls(start_equity=start_equity, cash=start_equity)

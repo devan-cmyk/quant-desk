@@ -67,14 +67,19 @@ class AlertFeed:
     """Append-only-ish JSON feed (capped) the dashboard reads."""
     def __init__(self, path: str | None = None):
         self.path = path or _path("QD_ALERTS", "~/.quant-desk/alerts.json")
-        self.items = json.load(open(self.path)) if os.path.exists(self.path) else []
+        if os.path.exists(self.path):
+            with open(self.path) as f:
+                self.items = json.load(f)
+        else:
+            self.items = []
 
     def append(self, events: list[dict]) -> None:
         self.items = (self.items + events)[-FEED_MAX:]
 
     def save(self) -> None:
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
-        json.dump(self.items, open(self.path, "w"), indent=2)
+        with open(self.path, "w") as f:
+            json.dump(self.items, f, indent=2)
 
     def recent(self, n: int = 30) -> list[dict]:
         return list(reversed(self.items))[:n]
@@ -120,7 +125,11 @@ def run_alerts(reg, *, snapshot_path: str | None = None, notify: bool = True) ->
     """Diff the gate vs the last-alerted snapshot, record + emit any changes, advance the
     snapshot. Returns the events raised (empty if the gate is unchanged)."""
     snap_path = snapshot_path or _path("QD_GATE_SNAPSHOT", "~/.quant-desk/gate_snapshot.json")
-    prev = json.load(open(snap_path)) if os.path.exists(snap_path) else {}
+    if os.path.exists(snap_path):
+        with open(snap_path) as f:
+            prev = json.load(f)
+    else:
+        prev = {}
     curr = gate_state(reg)
     events = diff_gate(prev, curr)
     if events:
@@ -129,5 +138,6 @@ def run_alerts(reg, *, snapshot_path: str | None = None, notify: bool = True) ->
             _notify_macos(events)
             _notify_webhook(events)
     os.makedirs(os.path.dirname(snap_path), exist_ok=True)
-    json.dump(curr, open(snap_path, "w"), indent=2)
+    with open(snap_path, "w") as f:
+        json.dump(curr, f, indent=2)
     return events

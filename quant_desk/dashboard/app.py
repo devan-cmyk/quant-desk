@@ -23,7 +23,8 @@ def _state_path() -> str:
 def _state() -> dict:
     p = _state_path()
     if os.path.exists(p):
-        return json.load(open(p))
+        with open(p) as f:
+            return json.load(f)
     return {"start_equity": 100_000, "cash": 100_000, "positions": {}, "blotter": [],
             "equity_curve": [], "last_ts": None}
 
@@ -118,4 +119,5 @@ def journal(n: int = 30) -> dict:
 
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
-    return open(os.path.join(HERE, "index.html")).read()
+    with open(os.path.join(HERE, "index.html")) as f:
+        return f.read()
