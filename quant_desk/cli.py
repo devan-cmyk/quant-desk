@@ -39,6 +39,15 @@ PARAM_GRIDS = {
 }
 
 
+def _sens_str(sn: dict) -> str:
+    """One-line parameter-robustness summary for review output: plateau vs overfit spike."""
+    frac = sn.get("frac_profitable")
+    if frac is None:
+        return sn.get("detail", "n/a")
+    tag = "PLATEAU" if sn.get("robust", True) else "FRAGILE SPIKE — overfit risk"
+    return f"{frac:.0%} of grid profitable OOS ({sn.get('n_combos', '?')} combos) → {tag}"
+
+
 def cmd_mode(_a) -> int:
     print(json.dumps({
         "trading_mode": settings.trading_mode,
@@ -279,10 +288,11 @@ def cmd_evaluate(a) -> int:
         raise SystemExit(res["error"])
     ev, c = res["evidence"], res["council"]
     print(f"\n=== COMMITTEE REVIEW: {a.strategy.upper()} on {a.symbol}{' +regime' if rf else ''} ===")
-    w, mc, st = ev["walkforward"], ev["montecarlo"], ev["stress"]
+    w, mc, st, sn = ev["walkforward"], ev["montecarlo"], ev["stress"], ev.get("sensitivity", {})
     print(f"  evidence: OOS {w['oos_return']:+.2%} ({w['num_trades']} trades, PF "
           f"{w['profit_factor']}) · MC ruin {mc['prob_ruin']} · stress survives_all={st['survived_all']} "
           f"· decay {ev['decay'].get('status')}")
+    print(f"  param-robustness: {_sens_str(sn)}")
     print("  deliberation:")
     for v in c["votes"]:
         print(f"    {v['agent']:14} → {v['vote']:12} ({v['confidence']:.2f})  {'; '.join(v['reasons'])}")
@@ -332,6 +342,9 @@ def cmd_review(a) -> int:
                       summary=f"{sym}: {c['decision']} (conf {c['confidence']})", decision=c["rationale"],
                       payload={"evidence": res["evidence"], "council": c})
             print(f"  {sym:6} {icon.get(c['decision'], '')} {c['decision']:12} (conf {c['confidence']}) — {c['rationale']}")
+            sn = res["evidence"].get("sensitivity", {})
+            if sn.get("frac_profitable") is not None:
+                print(f"  {'':6} ↳ param-robustness: {_sens_str(sn)}")
         tradeable = [s for s in symbols if reg.verdict(strat, s) in ("promote", "paper_watch")]
         print(f"  TRADEABLE [{strat}]: {tradeable or '(none)'}")
     reg.save(); jr.close()
