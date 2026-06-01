@@ -147,7 +147,10 @@ function moodColor(){ const r=window.__qdReturn||0;
 
 // adaptive performance guard: pause when the tab is hidden, and if the frame rate
 // sustains below 40fps after warmup, drop bloom + supersampling (the heaviest cost).
-let t=0, raf=0, running=true, degraded=false, frames=0, fpsT=performance.now();
+// Append ?lowfps=1 to the URL to force the degraded path (for testing on any machine).
+let t=0, raf=0, running=true, frames=0, fpsT=performance.now();
+let degraded = new URLSearchParams(location.search).get('lowfps') === '1';
+if(degraded) renderer.setPixelRatio(1);
 const startT = performance.now();
 document.addEventListener('visibilitychange', ()=>{
   if(document.hidden){ running=false; cancelAnimationFrame(raf); }
