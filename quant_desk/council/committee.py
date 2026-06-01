@@ -112,6 +112,14 @@ def decide(evidence: dict) -> dict:
             decision = qvote
             why = f"capped by edge quality — QuantResearch: {qvote} ({votes[1]['reasons'][-1]})"
 
+        # PARAMETER-FRAGILITY CAP: an overfit spike (only a corner of the grid is profitable OOS,
+        # not a plateau) cannot promote — the classic curve-fit. Like the cost gate, this can't be
+        # voted away; it caps the verdict at paper_watch (trade small under probation, never full).
+        sens = evidence.get("sensitivity", {})
+        if sens.get("frac_profitable") is not None and not sens.get("robust", True) and rank[decision] > 1:
+            decision = "paper_watch"
+            why = f"capped — parameter-fragile ({sens['frac_profitable']:.0%} of the grid profitable OOS, overfit risk)"
+
     conf = round(sum(v["confidence"] for v in votes) / len(votes), 2)
     dissent = [v["agent"] for v in votes if (v["vote"] == "reject") != (decision in ("reject", "retire"))]
     return {"decision": decision, "rationale": why, "confidence": conf,

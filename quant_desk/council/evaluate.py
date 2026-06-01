@@ -40,6 +40,10 @@ def evaluate(df: pd.DataFrame, strategy_cls: type[Strategy], param_grid: dict, *
     best = wf["folds"][-1]["best_params"] if wf.get("folds") else {}
     stress = run_stress(df, strategy_cls, params=best, regime_filter=regime_filter, limits=limits)
     decay = assess_folds(wf["folds"])
+    # parameter robustness: is the edge a plateau or an overfit spike? (same asset-class costs)
+    from ..backtest.sensitivity import parameter_robustness
+    sens = parameter_robustness(df, strategy_cls, param_grid, regime_filter=regime_filter,
+                                limits=limits, broker=broker, holdout_sessions=oos_sessions)
     # cost-stress + margin-of-safety, at the ASSET-CLASS cost (crypto edges face crypto costs).
     from .cost import cost_stress, cost_margin
     ckw = {"slippage_bps": prof["slippage_bps"], "commission_per_share": prof["commission_per_share"]}
@@ -57,6 +61,7 @@ def evaluate(df: pd.DataFrame, strategy_cls: type[Strategy], param_grid: dict, *
                        "n_trades": mc.get("n_trades")},
         "stress": {"survived_all": stress["survived_all"], "worst_drawdown": stress["worst_drawdown"]},
         "cost": cost,
+        "sensitivity": sens,
         "decay": decay,
     }
     verdict = committee.decide(evidence)
