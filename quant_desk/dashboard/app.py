@@ -50,6 +50,28 @@ def account() -> dict:
     }
 
 
+@app.get("/api/gate")
+def gate() -> dict:
+    """The promotion gate, surfaced: every strategy:symbol pair with the three independent
+    kill-paths (committee verdict · decay status · forward reconciliation) and whether the
+    runner is allowed to trade it. This is what `paper-run --select` honors."""
+    from ..monitor.registry import Registry
+    reg = Registry.load()
+    rows = []
+    for key, e in sorted(reg.data.items()):
+        strat, _, sym = key.partition(":")
+        rows.append({
+            "strategy": strat, "symbol": sym,
+            "verdict": e.get("verdict"), "verdict_rationale": e.get("verdict_rationale"),
+            "decay": e.get("status"), "recent_mean": e.get("recent_mean"),
+            "forward": e.get("forward"), "forward_detail": e.get("forward_detail"),
+            "blocked": reg.is_blocked(strat, sym), "updated": e.get("updated"),
+        })
+    tradeable = [r["symbol"] for r in rows if not r["blocked"] and r["verdict"] in ("promote", "paper_watch")]
+    return {"pairs": rows, "tradeable": tradeable,
+            "n_blocked": sum(r["blocked"] for r in rows), "n_total": len(rows)}
+
+
 @app.get("/api/journal")
 def journal(n: int = 30) -> dict:
     from ..archive.journal import Journal

@@ -31,3 +31,24 @@ def test_account_assembles_view(tmp_path, monkeypatch):
     assert a["by_symbol"]["SPY"]["trades"] == 2 and a["by_symbol"]["SPY"]["wins"] == 2
     assert a["monte_carlo"]["n_trades"] == 3     # >=3 trades → MC runs
     assert len(a["open_positions"]) == 1
+
+
+def test_gate_surfaces_the_three_kill_paths(tmp_path, monkeypatch):
+    from quant_desk.monitor.registry import Registry
+    from quant_desk.dashboard.app import gate
+    p = tmp_path / "registry.json"
+    monkeypatch.setenv("QD_REGISTRY", str(p))
+    reg = Registry.load()
+    reg.set_verdict("orb", "SPY", "promote", "validated")              # committee-clear
+    reg.set_verdict("orb", "QQQ", "promote", "validated")
+    reg.set_forward("orb", "QQQ", "drift", "edge absent live")          # but forward-drifted
+    reg.set_verdict("orb", "AAPL", "promote", "validated")
+    reg.update("orb", [{"symbol": "AAPL", "status": "retired", "recent_mean": -0.01}])  # decay-retired
+    reg.save()
+
+    g = gate()
+    by = {r["symbol"]: r for r in g["pairs"]}
+    assert by["SPY"]["blocked"] is False and "SPY" in g["tradeable"]
+    assert by["QQQ"]["blocked"] is True and by["QQQ"]["forward"] == "drift"   # drift blocks
+    assert by["AAPL"]["blocked"] is True and by["AAPL"]["decay"] == "retired" # decay blocks
+    assert g["n_blocked"] == 2 and g["tradeable"] == ["SPY"]

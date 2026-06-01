@@ -56,7 +56,7 @@ approval is revoked the moment an edge decays. Install each with
 | `com.quantdesk.reconcile` | Sat 09:30 | Compares each approved pair's **realized forward paper edge** against the profit factor it was promoted on; flags **drift** (edge absent live) — the feedback loop that catches overfit validation missed. |
 | `com.quantdesk.monitor`   | Sat 10:00 | Re-assesses rolling out-of-sample health, **auto-retires** decayed symbols in the registry. |
 | `com.quantdesk.paperrun`  | Weekdays 17:00 | `paper-run --select` — paper-trades only committee-approved pairs (`is_blocked` excludes anything rejected/retired). |
-| `com.quantdesk.dashboard` | always-on (:8800) | FastAPI account + research-journal dashboard. |
+| `com.quantdesk.dashboard` | always-on (:8800) | FastAPI dashboard: account, equity curve, **strategy gate** (all three kill-paths per pair), research journal. |
 
 The gate (`monitor/registry.py: is_blocked`) blocks a pair if the committee said
 `reject`/`retire`, the decay monitor retired it, **or** forward reconciliation flagged

@@ -32,13 +32,16 @@ class Registry:
             if a["status"] in ("error", "insufficient_data"):
                 continue
             key = f"{strategy}:{a['symbol']}"
-            prev = self.data.get(key)
-            if prev and prev.get("status") != a["status"]:
+            prev = self.data.get(key) or {}
+            if prev.get("status") and prev["status"] != a["status"]:
                 changes.append({"symbol": a["symbol"], "from": prev["status"], "to": a["status"]})
-            hist = (prev or {}).get("history", [])
+            hist = prev.get("history", [])
             hist.append({"ts": now, "status": a["status"], "recent_mean": a.get("recent_mean")})
-            self.data[key] = {"status": a["status"], "recent_mean": a.get("recent_mean"),
-                              "trend": a.get("trend"), "updated": now, "history": hist[-50:]}
+            # merge, don't overwrite — preserve committee verdict + forward-recon fields that
+            # other tools wrote to this pair (the decay monitor only owns the decay fields)
+            prev.update({"status": a["status"], "recent_mean": a.get("recent_mean"),
+                         "trend": a.get("trend"), "updated": now, "history": hist[-50:]})
+            self.data[key] = prev
         return changes
 
     def active(self, strategy: str) -> list[str]:

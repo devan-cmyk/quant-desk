@@ -25,6 +25,13 @@
   th { color:var(--mut); font-weight:600; font-size:11px; text-transform:uppercase; }
   .mut { color:var(--mut); } .right { text-align:right; }
   canvas { max-height:280px; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600;
+          border:1px solid transparent; }
+  .pill.go  { background:#1d2b1d; color:var(--grn); border-color:#2ea04340; }
+  .pill.warn{ background:#2b2718; color:#d29922; border-color:#bb800940; }
+  .pill.kill{ background:#2b1a1a; color:var(--red); border-color:#f8514940; }
+  .pill.off { background:#161b22; color:var(--mut); border-color:var(--line); }
+  tr.blocked td { background:#f851490a; }
 </style>
 </head>
 <body><div class="wrap">
@@ -32,6 +39,9 @@
   <h1>quant-desk</h1><div class="sub" id="sub">forward paper account</div>
 
   <div class="cards" id="cards"></div>
+  <section><h2>Strategy gate — what the runner is allowed to trade <span class="mut" id="gatesum"></span></h2>
+    <div class="mut" style="margin-bottom:10px;font-size:12px">Three independent kill-paths feed one gate: the committee <b>verdict</b>, the decay monitor <b>decay</b>, and forward <b>reconciliation</b>. A pair trades only when none of them block it.</div>
+    <div id="gate"></div></section>
   <section><h2>Equity curve (forward, out-of-sample)</h2><canvas id="eq"></canvas></section>
   <section><h2>Open positions</h2><div id="positions"></div></section>
   <section><h2>Per-symbol</h2><div id="bysym"></div></section>
@@ -108,7 +118,7 @@ function table(head, rows){
 async function loadJournal(){
   try {
     const j = await (await fetch("/api/journal?n=25")).json();
-    const ic = {monitor:"🔍",retirement:"💀",recovery:"🌱",paper_run:"📈",backtest:"🧪",stress:"🌪",walkforward:"🚶",montecarlo:"🎲",multisymbol:"🗂"};
+    const ic = {monitor:"🔍",retirement:"💀",recovery:"🌱",paper_run:"📈",backtest:"🧪",stress:"🌪",walkforward:"🚶",montecarlo:"🎲",multisymbol:"🗂",council_decision:"⚖️",reconciliation:"🚨"};
     document.getElementById("journal").innerHTML = (j.entries||[]).length ? table(
       ["when","event","strategy","summary"],
       j.entries.map(e=>[e.ts.slice(0,16).replace("T"," "), `${ic[e.kind]||"·"} ${e.kind}`, e.strategy||"—",
@@ -116,6 +126,38 @@ async function loadJournal(){
       `<div class="mut">empty — records accrue as the monitor / paper-run / stress tools execute</div>`;
   } catch(e){ document.getElementById("journal").innerHTML = `<div class="mut">—</div>`; }
 }
-load(); loadJournal(); setInterval(()=>{load();loadJournal();}, 30000);
+function pill(val, kind){
+  if(val==null) return `<span class="pill off">—</span>`;
+  const cls = {promote:"go",paper_watch:"warn",reject:"kill",retire:"kill",
+               healthy:"go",watch:"warn",retired:"kill",
+               ok:"go",drift:"kill",insufficient_data:"off"}[val] || "off";
+  return `<span class="pill ${cls}">${val}</span>`;
+}
+async function loadGate(){
+  try{
+    const g = await (await fetch("/api/gate")).json();
+    document.getElementById("gatesum").textContent =
+      g.n_total ? `· ${g.tradeable.length} tradeable, ${g.n_blocked} blocked of ${g.n_total}` : "";
+    const rows = (g.pairs||[]).map(p=>{
+      const why = p.blocked
+        ? (p.verdict==="reject"||p.verdict==="retire" ? p.verdict_rationale
+           : p.forward==="drift" ? p.forward_detail
+           : p.decay==="retired" ? "decay monitor retired" : "blocked")
+        : "trading";
+      const status = p.blocked ? `<span class="pill kill">BLOCKED</span>` : `<span class="pill go">TRADING</span>`;
+      return [`<b>${p.symbol}</b>`, p.strategy, pill(p.verdict), pill(p.decay), pill(p.forward),
+              status, `<span class="mut">${why||"—"}</span>`];
+    });
+    document.getElementById("gate").innerHTML = rows.length
+      ? tableC(["symbol","strategy","committee","decay","forward","runner","why"], rows, g.pairs)
+      : `<div class="mut">empty — run <code>quant-desk review</code> then <code>quant-desk reconcile</code> to populate the gate</div>`;
+  } catch(e){ document.getElementById("gate").innerHTML = `<div class="mut">—</div>`; }
+}
+function tableC(head, rows, meta){
+  return `<table><thead><tr>${head.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${
+    rows.map((r,i)=>`<tr class="${meta&&meta[i]&&meta[i].blocked?'blocked':''}">${
+      r.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+}
+load(); loadGate(); loadJournal(); setInterval(()=>{load();loadGate();loadJournal();}, 30000);
 </script>
 </div></body></html>

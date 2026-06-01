@@ -55,6 +55,18 @@ def test_committee_verdict_gates_the_runner(tmp_path):
     assert Registry.load(p).is_blocked("orb", "AAPL")  # persists
 
 
+def test_decay_update_preserves_verdict_and_forward(tmp_path):
+    # regression: the decay monitor (update) must NOT wipe committee verdict / forward recon,
+    # because in the live loop it runs AFTER review + reconcile on the same pair.
+    reg = Registry(path=str(tmp_path / "reg.json"))
+    reg.set_verdict("orb", "SPY", "promote", "validated")
+    reg.set_forward("orb", "SPY", "ok", "edge holds")
+    reg.update("orb", [{"symbol": "SPY", "status": "healthy", "recent_mean": 0.01}])
+    assert reg.verdict("orb", "SPY") == "promote"     # verdict survived the decay update
+    assert reg.forward("orb", "SPY") == "ok"          # forward recon survived too
+    assert reg.data["orb:SPY"]["status"] == "healthy" # and decay status was written
+
+
 def test_monitor_universe_runs(multi_session):
     res = monitor_universe(["AAA", "BBB"], OpeningRangeBreakout,
                            {"or_minutes": [30], "target_r": [1.5, 2.0]},
