@@ -39,6 +39,7 @@
   <h1>quant-desk</h1><div class="sub" id="sub">forward paper account</div>
 
   <div class="cards" id="cards"></div>
+  <section id="alertsec" style="display:none"><h2>⚠ Gate alerts <span class="mut" id="alertsum"></span></h2><div id="alerts"></div></section>
   <section><h2>Strategy gate — what the runner is allowed to trade <span class="mut" id="gatesum"></span></h2>
     <div class="mut" style="margin-bottom:10px;font-size:12px">Three independent kill-paths feed one gate: the committee <b>verdict</b>, the decay monitor <b>decay</b>, and forward <b>reconciliation</b>. A pair trades only when none of them block it.</div>
     <div id="gate"></div></section>
@@ -169,6 +170,23 @@ function tableC(head, rows, meta){
     rows.map((r,i)=>`<tr class="${meta&&meta[i]&&meta[i].blocked?'blocked':''}">${
       r.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
 }
-load(); loadGate(); loadJournal(); setInterval(()=>{load();loadGate();loadJournal();}, 30000);
+async function loadAlerts(){
+  try{
+    const a = await (await fetch("/api/alerts?n=12")).json();
+    const items = a.alerts||[];
+    document.getElementById("alertsec").style.display = items.length ? "" : "none";
+    document.getElementById("alertsum").textContent = items.length
+      ? `· ${a.n_high} blocking, ${items.length-a.n_high} info` : "";
+    document.getElementById("alerts").innerHTML = items.map(e=>{
+      const hi = e.severity==="high";
+      return `<div style="padding:6px 0;border-bottom:1px solid var(--line)">
+        <span class="pill ${hi?'kill':'off'}">${hi?'BLOCKED':'info'}</span>
+        <span class="${hi?'neg':''}">${e.message}</span>
+        <span class="mut" style="font-size:11px"> · ${(e.ts||'').slice(0,16).replace('T',' ')}</span></div>`;
+    }).join("");
+  } catch(e){ document.getElementById("alertsec").style.display="none"; }
+}
+load(); loadAlerts(); loadGate(); loadJournal();
+setInterval(()=>{load();loadAlerts();loadGate();loadJournal();}, 30000);
 </script>
 </div></body></html>

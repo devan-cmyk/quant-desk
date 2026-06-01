@@ -414,6 +414,34 @@ def cmd_allocate(a) -> int:
     return 0
 
 
+def cmd_alerts(a) -> int:
+    """Gate alerting: notify when a pair flips TRADING↔BLOCKED or is newly approved. Diffs the
+    current gate against the last-alerted snapshot; appends to the feed + raises notifications."""
+    from .monitor.registry import Registry
+    from .alerts.gate_alerts import run_alerts, AlertFeed
+    if a.list:
+        for e in AlertFeed().recent(a.n):
+            mark = "🚨" if e["severity"] == "high" else "·"
+            print(f"  {e['ts'][:16].replace('T',' ')} {mark} {e['message']}")
+        return 0
+    if a.test:
+        ev = [{"ts": __import__("datetime").datetime.now().isoformat(), "pair": "test:PAIR",
+               "kind": "blocked", "severity": "high", "message": "test alert — channel check"}]
+        from .alerts.gate_alerts import _notify_macos, _notify_webhook
+        _notify_macos(ev); _notify_webhook(ev)
+        print("  → fired a test alert through the configured channels (macOS/webhook).")
+        return 0
+    events = run_alerts(Registry.load(), notify=not a.quiet)
+    if not events:
+        print("\n  gate unchanged since last check — no alerts.")
+        return 0
+    print(f"\n=== GATE ALERTS ({len(events)} change{'s' if len(events) != 1 else ''}) ===")
+    for e in events:
+        mark = "🚨" if e["severity"] == "high" else "·"
+        print(f"  {mark} {e['message']}")
+    return 0
+
+
 def cmd_journal(a) -> int:
     from .archive.journal import Journal
     jr = Journal()
@@ -503,6 +531,11 @@ def main() -> int:
     al.add_argument("--strategy", default="orb,meanrev,vwap")
     al.add_argument("--interval", default="5m"); al.add_argument("--days", type=int, default=58)
     al.add_argument("--regime", action="store_true")
+    al2 = sub.add_parser("alerts"); al2.set_defaults(fn=cmd_alerts)
+    al2.add_argument("--list", action="store_true", help="show the recent alert feed")
+    al2.add_argument("--test", action="store_true", help="fire a test alert through the channels")
+    al2.add_argument("--quiet", action="store_true", help="record to the feed but don't notify")
+    al2.add_argument("-n", type=int, default=30)
     rv = sub.add_parser("review"); rv.set_defaults(fn=cmd_review)
     rv.add_argument("--symbols", default="SPY,QQQ,IWM,AAPL,NVDA,MSFT")
     rv.add_argument("--strategy", default="orb"); rv.add_argument("--interval", default="5m")

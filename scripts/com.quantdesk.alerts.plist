@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Weekly gate alerting. Saturdays 11:00 local (after review 09:00 → reconcile 09:30 →
+     monitor 10:00 → allocate 10:30 have settled the gate for the week): diff the current
+     promotion gate against the last-alerted snapshot and raise an alert for every pair that
+     flipped TRADING↔BLOCKED or was newly approved. Alerts append to ~/.quant-desk/alerts.json
+     (the dashboard reads it) and raise a macOS desktop notification. An external webhook is
+     OFF unless QD_ALERT_WEBHOOK is set — nothing leaves the machine by default. To mute the
+     desktop popup set QD_ALERT_MACOS=0. Read-only; paper-only system.
+     Install:
+       cp scripts/com.quantdesk.alerts.plist ~/Library/LaunchAgents/
+       launchctl load ~/Library/LaunchAgents/com.quantdesk.alerts.plist -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.quantdesk.alerts</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/devantipler/quant-desk/.venv/bin/quant-desk</string>
+    <string>alerts</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/devantipler/quant-desk</string>
+  <key>StartCalendarInterval</key>
+  <dict><key>Weekday</key><integer>6</integer><key>Hour</key><integer>11</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>/Users/devantipler/quant-desk/alerts.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/devantipler/quant-desk/alerts.err.log</string>
+</dict>
+</plist>

@@ -77,6 +77,13 @@ def gate() -> dict:
             "n_blocked": sum(r["blocked"] for r in rows), "n_total": len(rows)}
 
 
+@app.get("/api/alerts")
+def alerts(n: int = 20) -> dict:
+    from ..alerts.gate_alerts import AlertFeed
+    items = AlertFeed().recent(n)
+    return {"alerts": items, "n_high": sum(a.get("severity") == "high" for a in items)}
+
+
 @app.get("/api/journal")
 def journal(n: int = 30) -> dict:
     from ..archive.journal import Journal
