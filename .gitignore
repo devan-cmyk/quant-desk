@@ -9,3 +9,8 @@ data/cache/
 *.egg-info/
 dist/
 build/
+
+# runtime / agent logs (operational noise — never version these)
+*.log
+*.out.log
+*.err.log
