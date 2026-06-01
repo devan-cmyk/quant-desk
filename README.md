@@ -89,9 +89,12 @@ account it hasn't cleared, and approval is revoked the moment an edge decays. In
 5-minute agents on the shared registry/account. **No regime filter** (mean-reversion is
 contrarian — the trend gate would veto its entries) and a **mandatory volatility circuit-breaker**
 (it stands aside in a vol blow-up; justified by 33-yr out-of-sample evidence, not the optimizer).
-This is the project's first cost-robust edge: across a diversified daily universe (indices,
-sectors, bonds) the committee currently clears **SPY, IWM, XLK, XLP (paper_watch) and XLF, TLT
-(promote)** through the 2× cost gate out-of-sample — TLT (bonds) a genuine cross-asset diversifier.
+This is the project's first cost-robust edge. Candidates are first screened by the **cost margin
+of safety** (`quant-desk cost-curve` — how many cost-multiples an edge absorbs before breakeven),
+then only survivors face the committee gauntlet. Across a diversified daily universe (indices,
+sectors, bonds, commodities, intl) the committee currently clears **9 pairs** — promotes
+**SLV, TLT, XLF, XLRE** and paper_watch **SPY, IWM, XLK, XLP, FXI** — with TLT (bonds), SLV
+(silver), XLRE (real estate), FXI (China) as genuine cross-asset diversifiers.
 
 | Agent | When | Does |
 |---|---|---|

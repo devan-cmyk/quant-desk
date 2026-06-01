@@ -16,7 +16,7 @@
     <string>/Users/devantipler/quant-desk/.venv/bin/quant-desk</string>
     <string>live-tick</string>
     <string>--strategy</string><string>dmr</string>
-    <string>--symbols</string><string>SPY,QQQ,IWM,XLF,XLE,XLK,XLV,XLI,XLP,TLT,EEM</string>
+    <string>--symbols</string><string>SPY,QQQ,IWM,XLF,XLE,XLK,XLV,XLI,XLP,TLT,EEM,FXI,SLV,XLRE</string>
     <string>--interval</string><string>1d</string>
     <string>--days</string><string>730</string>
     <string>--broker</string><string>sim</string>
