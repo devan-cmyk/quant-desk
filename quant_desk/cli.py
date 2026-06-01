@@ -491,6 +491,42 @@ def cmd_refresh(a) -> int:
     return 0
 
 
+def cmd_live_tick(a) -> int:
+    """One REAL-TIME decision cycle on the latest bar (not a replay): manage open positions,
+    evaluate new entries on the current bar, route through the chosen broker. Idempotent per bar.
+    Run this on a cadence (after the close for daily) — the correct forward-execution path."""
+    from .monitor.registry import Registry
+    from .live.realtime import live_tick
+    data_fn = _data_fn(a.interval, a.days)
+    rf = RegimeFilter() if a.regime else None
+    reg = Registry.load()
+    base_syms = [s.strip().upper() for s in a.symbols.split(",") if s.strip()]
+    mandates = []
+    for strat in _strategies(a):
+        approved = [s for s in base_syms
+                    if reg.verdict(strat, s) in ("promote", "paper_watch") and not reg.is_blocked(strat, s)]
+        if approved:
+            mandates.append({"name": strat, "cls": REGISTRY[strat],
+                             "symbols": approved, "params": {s: reg.params(strat, s) for s in approved},
+                             "regime_filter": rf, "risk_scales": {s: reg.effective_scale(strat, s) for s in approved}})
+    if not mandates:
+        print("no committee-approved pairs to trade (run review first)"); return 0
+    broker = None
+    if a.broker == "alpaca":
+        from .execution.alpaca_broker import AlpacaBroker
+        broker = AlpacaBroker(paper=not a.live, unlock_token=a.unlock_token)   # fail-secure: needs QD_ALPACA_ENABLE etc.
+    pf = PaperPortfolio.load(PAPER_STATE)
+    res = live_tick(mandates, data_fn=data_fn, portfolio=pf, broker=broker)
+    pf.save(PAPER_STATE)
+    print(f"\n=== LIVE TICK ({a.broker}{'/LIVE' if a.live else '/paper'}) — equity {res['equity']} ===")
+    for act in res["actions"]:
+        print(f"  {act['ts']} {act.get('strategy','')}/{act['symbol']} {act['act']}"
+              + (f" pnl={act['pnl']:+.2f}" if 'pnl' in act else f" x{act.get('qty')}"))
+    print(f"  open: {list(res['open_positions'])}  ·  actions: {len(res['actions'])}")
+    print(f"  state → {PAPER_STATE}")
+    return 0
+
+
 def cmd_backup(a) -> int:
     """Integrity-verified state backup / verify / restore for ~/.quant-desk."""
     from .backup import create_backup, verify_backup, restore_backup, list_backups, verify_state
@@ -674,6 +710,13 @@ def main() -> int:
     rf2.add_argument("--fit-sessions", type=int, default=20, dest="fit_sessions")
     rf2.add_argument("--holdout-sessions", type=int, default=5, dest="holdout_sessions")
     rf2.add_argument("--regime", action="store_true")
+    lt = sub.add_parser("live-tick"); lt.set_defaults(fn=cmd_live_tick)
+    lt.add_argument("--strategy", default="dmr"); lt.add_argument("--symbols", default="SPY,QQQ,IWM,XLF,XLK,XLP,TLT")
+    lt.add_argument("--interval", default="1d"); lt.add_argument("--days", type=int, default=730)
+    lt.add_argument("--regime", action="store_true")
+    lt.add_argument("--broker", choices=["sim", "alpaca"], default="sim")
+    lt.add_argument("--live", action="store_true", help="alpaca: route REAL money (needs the triple-lock)")
+    lt.add_argument("--unlock-token", default=None, dest="unlock_token")
     bk = sub.add_parser("backup"); bk.set_defaults(fn=cmd_backup)
     bk.add_argument("--list", action="store_true", help="list existing backups")
     bk.add_argument("--verify", metavar="ARCHIVE", help="verify an archive is restorable")

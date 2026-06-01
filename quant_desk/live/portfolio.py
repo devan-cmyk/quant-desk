@@ -29,6 +29,7 @@ class PaperPortfolio:
     blotter: list = field(default_factory=list)
     last_ts: str | None = None
     equity_curve: list = field(default_factory=list)  # [[iso_ts, equity], ...]
+    last_acted: dict = field(default_factory=dict)    # "strat:sym" -> last bar ts an ENTRY was evaluated on (real-time idempotency)
 
     # positions are keyed by "strategy:symbol" so multiple strategies can run in one shared
     # account; each position dict carries its own "symbol" (for marking) and "strategy" (for
