@@ -205,14 +205,15 @@ def cmd_paper_run(a) -> int:
                              regime_filter=rf, is_sessions=a.is_sessions, oos_sessions=a.oos_sessions)
         symbols = sel["qualified"]
         params_by_symbol = sel["selected_params"]
-        # honor the edge-decay registry: never trade a symbol the monitor has retired
+        # honor the promotion gate: never trade a pair the committee rejected/retired or the
+        # decay monitor retired (is_blocked covers both)
         from .monitor.registry import Registry
         reg = Registry.load()
-        retired = [s for s in symbols if reg.is_retired(a.strategy, s)]
-        if retired:
-            symbols = [s for s in symbols if s not in retired]
-            params_by_symbol = {s: p for s, p in params_by_symbol.items() if s not in retired}
-            print(f"excluded (edge decayed/retired): {retired}")
+        blocked = [s for s in symbols if reg.is_blocked(a.strategy, s)]
+        if blocked:
+            symbols = [s for s in symbols if s not in blocked]
+            params_by_symbol = {s: p for s, p in params_by_symbol.items() if s not in blocked}
+            print(f"excluded (committee/decay blocked): {blocked}")
         print(f"selected universe + validated params: {params_by_symbol or '(none)'}")
     else:
         symbols = [s.strip().upper() for s in a.symbols.split(",") if s.strip()]
@@ -267,7 +268,41 @@ def cmd_evaluate(a) -> int:
               summary=f"{a.symbol}: {c['decision']} (conf {c['confidence']})",
               decision=c["rationale"], payload={"evidence": ev, "council": c})
     jr.close()
-    print("\n  → recorded to the research journal (auditable promotion decision)")
+    from .monitor.registry import Registry
+    reg = Registry.load(); reg.set_verdict(a.strategy, a.symbol, c["decision"], c["rationale"]); reg.save()
+    print("\n  → verdict recorded to the registry + journal (the runner now honors it)")
+    return 0
+
+
+def cmd_review(a) -> int:
+    """Committee meeting: evaluate the whole universe and write verdicts the runner honors."""
+    from .council.evaluate import evaluate
+    from .archive.journal import Journal
+    from .monitor.registry import Registry
+    strat_cls = REGISTRY[a.strategy]
+    symbols = [s.strip().upper() for s in a.symbols.split(",") if s.strip()]
+    rf = RegimeFilter() if a.regime else None
+    data_fn = _data_fn(a.interval, a.days)
+    reg, jr = Registry.load(), Journal()
+    print(f"\n=== COMMITTEE REVIEW (universe): {a.strategy.upper()}{' +regime' if rf else ''} ===")
+    icon = {"promote": "✅", "paper_watch": "⚠️", "reject": "💀", "retire": "🪦"}
+    for sym in symbols:
+        try:
+            res = evaluate(data_fn(sym), strat_cls, PARAM_GRIDS.get(a.strategy, {}), regime_filter=rf,
+                           is_sessions=a.is_sessions, oos_sessions=a.oos_sessions)
+        except Exception as e:
+            print(f"  {sym:6} error: {str(e)[:60]}"); continue
+        if res.get("error"):
+            print(f"  {sym:6} {res['error']}"); continue
+        c = res["council"]
+        reg.set_verdict(a.strategy, sym, c["decision"], c["rationale"])
+        jr.record("council_decision", strategy=a.strategy, symbols=[sym],
+                  summary=f"{sym}: {c['decision']} (conf {c['confidence']})", decision=c["rationale"],
+                  payload={"evidence": res["evidence"], "council": c})
+        print(f"  {sym:6} {icon.get(c['decision'], '')} {c['decision']:12} (conf {c['confidence']}) — {c['rationale']}")
+    reg.save(); jr.close()
+    tradeable = [s for s in symbols if reg.verdict(a.strategy, s) in ("promote", "paper_watch")]
+    print(f"\n  TRADEABLE (committee-approved — the runner trades these): {tradeable or '(none)'}")
     return 0
 
 
@@ -351,6 +386,13 @@ def main() -> int:
     ev.add_argument("--is-sessions", type=int, default=15, dest="is_sessions")
     ev.add_argument("--oos-sessions", type=int, default=5, dest="oos_sessions")
     ev.add_argument("--regime", action="store_true")
+    rv = sub.add_parser("review"); rv.set_defaults(fn=cmd_review)
+    rv.add_argument("--symbols", default="SPY,QQQ,IWM,AAPL,NVDA,MSFT")
+    rv.add_argument("--strategy", default="orb"); rv.add_argument("--interval", default="5m")
+    rv.add_argument("--days", type=int, default=58)
+    rv.add_argument("--is-sessions", type=int, default=15, dest="is_sessions")
+    rv.add_argument("--oos-sessions", type=int, default=5, dest="oos_sessions")
+    rv.add_argument("--regime", action="store_true")
     mo = sub.add_parser("monitor"); mo.set_defaults(fn=cmd_monitor)
     mo.add_argument("--symbols", default="SPY,QQQ,IWM,AAPL,NVDA,MSFT")
     mo.add_argument("--strategy", default="orb"); mo.add_argument("--interval", default="5m")

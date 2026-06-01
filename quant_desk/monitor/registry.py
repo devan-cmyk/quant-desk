@@ -49,3 +49,21 @@ class Registry:
     def is_retired(self, strategy: str, symbol: str) -> bool:
         v = self.data.get(f"{strategy}:{symbol}")
         return bool(v and v.get("status") == "retired")
+
+    # ── committee verdicts (the decision committee's promote/reject/retire) ───
+    def set_verdict(self, strategy: str, symbol: str, verdict: str, rationale: str = "") -> None:
+        import datetime as _dt
+        key = f"{strategy}:{symbol}"
+        e = self.data.get(key, {})
+        e.update({"verdict": verdict, "verdict_rationale": rationale,
+                  "verdict_ts": _dt.datetime.now(_dt.timezone.utc).isoformat()})
+        self.data[key] = e
+
+    def verdict(self, strategy: str, symbol: str) -> str | None:
+        return (self.data.get(f"{strategy}:{symbol}") or {}).get("verdict")
+
+    def is_blocked(self, strategy: str, symbol: str) -> bool:
+        """True if the runner must NOT trade this pair — the committee rejected/retired it, or
+        the decay monitor retired it. The promotion gate for forward paper trading."""
+        e = self.data.get(f"{strategy}:{symbol}") or {}
+        return e.get("verdict") in ("reject", "retire") or e.get("status") == "retired"

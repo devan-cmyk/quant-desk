@@ -37,6 +37,24 @@ def test_registry_change_detection_and_active(tmp_path):
     assert reg2.is_retired("orb", "AAA") and reg2.is_retired("orb", "BBB")
 
 
+def test_committee_verdict_gates_the_runner(tmp_path):
+    p = str(tmp_path / "reg.json")
+    reg = Registry(path=p)
+    reg.set_verdict("orb", "SPY", "promote", "validated")
+    reg.set_verdict("orb", "AAPL", "retire", "edge decayed")
+    reg.set_verdict("orb", "TSLA", "reject", "fails crisis")
+    reg.set_verdict("orb", "QQQ", "paper_watch", "marginal")
+    assert reg.verdict("orb", "SPY") == "promote"
+    assert not reg.is_blocked("orb", "SPY")           # promoted → tradeable
+    assert not reg.is_blocked("orb", "QQQ")           # paper_watch → tradeable
+    assert reg.is_blocked("orb", "AAPL")              # retired → blocked
+    assert reg.is_blocked("orb", "TSLA")              # rejected → blocked
+    reg.update("orb", [{"symbol": "IWM", "status": "retired", "recent_mean": -0.01}])
+    assert reg.is_blocked("orb", "IWM")               # decay-retired also blocks
+    reg.save()
+    assert Registry.load(p).is_blocked("orb", "AAPL")  # persists
+
+
 def test_monitor_universe_runs(multi_session):
     res = monitor_universe(["AAA", "BBB"], OpeningRangeBreakout,
                            {"or_minutes": [30], "target_r": [1.5, 2.0]},
