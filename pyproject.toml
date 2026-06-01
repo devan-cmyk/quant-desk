@@ -1,8 +1,21 @@
 [project]
 name = "quant-desk"
 version = "0.1.0"
-description = "Modular, paper-only-by-default quantitative trading research platform (spine)."
+description = "Paper-only-by-default quantitative trading research toolkit with a cost-aware validation gauntlet."
+readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.12"
+keywords = ["quant", "trading", "backtest", "walk-forward", "risk", "paper-trading", "research"]
+authors = [{ name = "Devan" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Investment",
+    "Typing :: Typed",
+]
 dependencies = [
     "pandas>=2.2",
     "numpy>=1.26",
@@ -12,6 +25,10 @@ dependencies = [
     "pydantic-settings>=2.3",
     "structlog>=24.1",
 ]
+
+[project.urls]
+Homepage = "https://github.com/devan-cmyk/quant-desk"
+Repository = "https://github.com/devan-cmyk/quant-desk"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]

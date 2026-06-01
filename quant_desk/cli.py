@@ -642,7 +642,9 @@ def cmd_dashboard(a) -> int:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(prog="quant-desk")
+    from . import __version__
+    ap = argparse.ArgumentParser(prog="quant-desk", description="paper-only quant research toolkit")
+    ap.add_argument("--version", action="version", version=f"quant-desk {__version__}")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("mode").set_defaults(fn=cmd_mode)
     b = sub.add_parser("backtest"); b.set_defaults(fn=cmd_backtest)

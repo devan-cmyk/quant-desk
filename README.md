@@ -40,6 +40,25 @@ uv venv --python 3.12 && uv pip install -e ".[dev]"
 .venv/bin/quant-desk backtest --symbol SPY --strategy orb --interval 5m --days 30
 ```
 
+## Use as a library (open-core toolkit)
+Import the stable public API from `quant_desk` (not internal submodules):
+```python
+from quant_desk import YFinanceProvider, OpeningRangeBreakout, RiskEngine, run_backtest, evaluate
+df  = YFinanceProvider().bars("SPY", interval="5m", lookback_days=30)
+res = run_backtest(df, OpeningRangeBreakout(), RiskEngine())     # trades + metrics
+gauntlet = evaluate(df, OpeningRangeBreakout, {"or_minutes": [15, 30]})  # walk-forward + cost-stress + committee
+```
+Public surface: `Strategy/Signal/REGISTRY` + the strategies, `DataProvider/OHLCV/YFinanceProvider`,
+`run_backtest/walk_forward/compute_metrics/evaluate`, `RiskEngine/RiskLimits/PaperBroker`,
+`PaperPortfolio/live_tick`, and the `live_guard`. `quant-desk --version` reports the version.
+
+**Open-core boundary (proposed — owner decision before any public release).** Open core: the
+research spine you'd run yourself — data abstraction, strategy framework, backtest/walk-forward,
+risk engine, paper broker, metrics, the CLI. Candidate commercial tier: the hosted autonomous
+operation (the scheduled agents, dashboard, alerting, backups), managed live-execution adapters,
+and support. The code is **not** split into packages yet — this is the intended line, not a
+refactor. Licensed MIT (placeholder pending your confirmation); nothing is published.
+
 ## Metrics
 total return, CAGR, Sharpe, Sortino, Calmar, max drawdown, win rate, expectancy, profit
 factor. (Ulcer/VaR/CVaR/recovery-factor bolt onto `backtest/metrics.py` the same way.)
