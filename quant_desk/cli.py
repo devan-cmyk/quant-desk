@@ -136,6 +136,23 @@ def cmd_select(a) -> int:
     return 0
 
 
+def cmd_stress(a) -> int:
+    from .stress.lab import stress_test
+    strat_cls = REGISTRY[a.strategy]
+    df = YFinanceProvider().bars(a.symbol, interval=a.interval, lookback_days=a.days)
+    rf = RegimeFilter() if a.regime else None
+    res = stress_test(df, strat_cls, regime_filter=rf, ruin_drawdown=a.ruin)
+    print(f"\n=== STRESS LAB: {a.strategy.upper()} on {a.symbol}{' +regime' if rf else ''} "
+          f"(ruin at -{a.ruin:.0%} drawdown) ===")
+    print(f"  {'scenario':18} {'return':>8} {'max DD':>8} {'worst trade':>12} {'trades':>7}  survived")
+    for r in res["results"]:
+        print(f"  {r['scenario']:18} {r['total_return']:+8.4f} {r['max_drawdown']:+8.4f} "
+              f"{r['worst_trade']:>12.2f} {r['trades']:>7}  {'✅' if r['survived'] else '💀 RUIN'}")
+    print(f"\n  worst drawdown across all crises: {res['worst_drawdown']:+.4f}  ·  "
+          f"{'✅ SURVIVES ALL' if res['survived_all'] else '💀 DOES NOT SURVIVE'}")
+    return 0
+
+
 def cmd_paper_run(a) -> int:
     strat_cls = REGISTRY[a.strategy]
     data_fn = _data_fn(a.interval, a.days)
@@ -220,6 +237,10 @@ def main() -> int:
     pr.add_argument("--max-bars", type=int, default=78, dest="max_bars", help="forward bars to process")
     db = sub.add_parser("dashboard"); db.set_defaults(fn=cmd_dashboard)
     db.add_argument("--host", default="127.0.0.1"); db.add_argument("--port", type=int, default=8800)
+    ss = sub.add_parser("stress"); ss.set_defaults(fn=cmd_stress)
+    ss.add_argument("--symbol", default="SPY"); ss.add_argument("--strategy", default="orb")
+    ss.add_argument("--interval", default="5m"); ss.add_argument("--days", type=int, default=30)
+    ss.add_argument("--ruin", type=float, default=0.25); ss.add_argument("--regime", action="store_true")
     a = ap.parse_args()
     configure(settings.log_level)
     return a.fn(a)
