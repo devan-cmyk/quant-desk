@@ -12,6 +12,7 @@ from .backtest.walkforward import walk_forward
 from .config import settings
 from .data.yfinance_provider import YFinanceProvider
 from .logging import configure, get
+from .regime.filter import RegimeFilter
 from .risk.engine import RiskEngine
 from .strategies import REGISTRY
 
@@ -41,8 +42,10 @@ def cmd_backtest(a) -> int:
         raise SystemExit(f"unknown strategy '{a.strategy}'. available: {list(REGISTRY)}")
     df = YFinanceProvider().bars(a.symbol, interval=a.interval, lookback_days=a.days)
     risk = RiskEngine()
-    res = run_backtest(df, strat_cls(), risk)
-    print(f"\n=== {a.strategy.upper()} on {a.symbol} ({a.interval}, {a.days}d, {len(df)} bars) ===")
+    rf = RegimeFilter() if a.regime else None
+    res = run_backtest(df, strat_cls(), risk, regime_filter=rf)
+    print(f"\n=== {a.strategy.upper()} on {a.symbol} ({a.interval}, {a.days}d, {len(df)} bars)"
+          f"{' +regime' if rf else ''} ===")
     print(json.dumps(res["metrics"], indent=2, default=str))
     print(f"\ntrades: {len(res['trades'])}  (paper-only simulation)")
     for t in res["trades"][-8:]:
@@ -57,8 +60,9 @@ def cmd_walkforward(a) -> int:
         raise SystemExit(f"unknown strategy '{a.strategy}'. available: {list(REGISTRY)}")
     df = YFinanceProvider().bars(a.symbol, interval=a.interval, lookback_days=a.days)
     grid = PARAM_GRIDS.get(a.strategy, {})
+    rf = RegimeFilter() if a.regime else None
     res = walk_forward(df, strat_cls, grid, is_sessions=a.is_sessions, oos_sessions=a.oos_sessions,
-                       metric=a.metric)
+                       metric=a.metric, regime_filter=rf)
     if res.get("error"):
         raise SystemExit(res["error"] + f" (have {len(set(df.index.tz_convert('America/New_York').date))} sessions)")
     print(f"\n=== WALK-FORWARD {a.strategy.upper()} on {a.symbol} "
@@ -80,6 +84,7 @@ def main() -> int:
     b.add_argument("--strategy", default="orb")
     b.add_argument("--interval", default="5m")
     b.add_argument("--days", type=int, default=30)
+    b.add_argument("--regime", action="store_true", help="gate signals with the trend/chop filter")
     w = sub.add_parser("walkforward"); w.set_defaults(fn=cmd_walkforward)
     w.add_argument("--symbol", default="SPY")
     w.add_argument("--strategy", default="orb")
@@ -88,6 +93,7 @@ def main() -> int:
     w.add_argument("--is-sessions", type=int, default=15, dest="is_sessions")
     w.add_argument("--oos-sessions", type=int, default=5, dest="oos_sessions")
     w.add_argument("--metric", default="total_return")
+    w.add_argument("--regime", action="store_true", help="gate signals with the trend/chop filter")
     a = ap.parse_args()
     configure(settings.log_level)
     return a.fn(a)

@@ -19,7 +19,7 @@ ET = "America/New_York"
 
 
 def run_backtest(df: pd.DataFrame, strategy: Strategy, risk: RiskEngine,
-                 broker: PaperBroker | None = None) -> dict:
+                 broker: PaperBroker | None = None, regime_filter=None) -> dict:
     broker = broker or PaperBroker()
     strategy.initialize()
     df = df.sort_index()
@@ -69,7 +69,11 @@ def run_backtest(df: pd.DataFrame, strategy: Strategy, risk: RiskEngine,
 
         # 3. new entry (flat, not the session's last bar)
         if pos is None and not session_last:
-            sig = strategy.generate_signal(df.iloc[: i + 1])
+            window = df.iloc[: i + 1]
+            sig = strategy.generate_signal(window)
+            # regime gate: veto signals that fight the prevailing trend (or fire in chop)
+            if sig.side in ("long", "short") and regime_filter and not regime_filter.allows(window, sig.side):
+                sig = sig.__class__(side="flat")
             if sig.side in ("long", "short") and sig.stop is not None:
                 dec = risk.evaluate(entry=float(bar["close"]), stop=float(sig.stop))
                 if dec.allowed:
