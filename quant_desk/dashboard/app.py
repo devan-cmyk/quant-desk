@@ -69,6 +69,7 @@ def gate() -> dict:
             "verdict": e.get("verdict"), "verdict_rationale": e.get("verdict_rationale"),
             "decay": e.get("status"), "recent_mean": e.get("recent_mean"),
             "forward": e.get("forward"), "forward_detail": e.get("forward_detail"),
+            "weight": e.get("weight"), "risk_scale": e.get("risk_scale"),
             "blocked": reg.is_blocked(strat, sym), "updated": e.get("updated"),
         })
     tradeable = [r["symbol"] for r in rows if not r["blocked"] and r["verdict"] in ("promote", "paper_watch")]

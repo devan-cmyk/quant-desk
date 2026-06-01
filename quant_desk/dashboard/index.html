@@ -127,7 +127,7 @@ function table(head, rows){
 async function loadJournal(){
   try {
     const j = await (await fetch("/api/journal?n=25")).json();
-    const ic = {monitor:"🔍",retirement:"💀",recovery:"🌱",paper_run:"📈",backtest:"🧪",stress:"🌪",walkforward:"🚶",montecarlo:"🎲",multisymbol:"🗂",council_decision:"⚖️",reconciliation:"🚨"};
+    const ic = {monitor:"🔍",retirement:"💀",recovery:"🌱",paper_run:"📈",backtest:"🧪",stress:"🌪",walkforward:"🚶",montecarlo:"🎲",multisymbol:"🗂",council_decision:"⚖️",reconciliation:"🚨",allocation:"⚖"};
     document.getElementById("journal").innerHTML = (j.entries||[]).length ? table(
       ["when","event","strategy","summary"],
       j.entries.map(e=>[e.ts.slice(0,16).replace("T"," "), `${ic[e.kind]||"·"} ${e.kind}`, e.strategy||"—",
@@ -154,11 +154,13 @@ async function loadGate(){
            : p.decay==="retired" ? "decay monitor retired" : "blocked")
         : "trading";
       const status = p.blocked ? `<span class="pill kill">BLOCKED</span>` : `<span class="pill go">TRADING</span>`;
+      const alloc = (!p.blocked && p.risk_scale!=null)
+        ? `${(p.weight*100).toFixed(0)}% · ${p.risk_scale}×` : `<span class="mut">—</span>`;
       return [`<b>${p.symbol}</b>`, p.strategy, pill(p.verdict), pill(p.decay), pill(p.forward),
-              status, `<span class="mut">${why||"—"}</span>`];
+              status, alloc, `<span class="mut">${why||"—"}</span>`];
     });
     document.getElementById("gate").innerHTML = rows.length
-      ? tableC(["symbol","strategy","committee","decay","forward","runner","why"], rows, g.pairs)
+      ? tableC(["symbol","strategy","committee","decay","forward","runner","alloc (wt·risk×)","why"], rows, g.pairs)
       : `<div class="mut">empty — run <code>quant-desk review</code> then <code>quant-desk reconcile</code> to populate the gate</div>`;
   } catch(e){ document.getElementById("gate").innerHTML = `<div class="mut">—</div>`; }
 }

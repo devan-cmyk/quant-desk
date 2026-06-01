@@ -40,7 +40,7 @@ class RiskEngine:
         log.error("kill_switch_tripped", reason=reason)
 
     # ── entry gate + sizing ──────────────────────────────────────────────────
-    def evaluate(self, *, entry: float, stop: float) -> RiskDecision:
+    def evaluate(self, *, entry: float, stop: float, risk_scale: float = 1.0) -> RiskDecision:
         if self.kill_switch:
             return RiskDecision(False, 0, f"kill_switch: {self.kill_reason}")
         if self.halted_today:
@@ -51,7 +51,8 @@ class RiskEngine:
         per_share_risk = abs(entry - stop)
         if per_share_risk <= 0:
             return RiskDecision(False, 0, "invalid_stop")
-        risk_budget = self.equity * self.limits.risk_per_trade_pct
+        # risk_scale is the portfolio allocator's per-pair multiplier (1.0 == unscaled)
+        risk_budget = self.equity * self.limits.risk_per_trade_pct * risk_scale
         qty = math.floor(risk_budget / per_share_risk)
         # exposure cap: notional <= max_position_pct of equity
         max_qty = math.floor((self.equity * self.limits.max_position_pct) / max(entry, 1e-9))

@@ -77,6 +77,18 @@ class Registry:
     def forward(self, strategy: str, symbol: str) -> str | None:
         return (self.data.get(f"{strategy}:{symbol}") or {}).get("forward")
 
+    # ── portfolio allocation (diversification-aware per-pair risk weight) ──────
+    def set_allocation(self, strategy: str, symbol: str, weight: float, scale: float) -> None:
+        import datetime as _dt
+        key = f"{strategy}:{symbol}"
+        e = self.data.get(key, {})
+        e.update({"weight": round(float(weight), 4), "risk_scale": round(float(scale), 3),
+                  "alloc_ts": _dt.datetime.now(_dt.timezone.utc).isoformat()})
+        self.data[key] = e
+
+    def risk_scale(self, strategy: str, symbol: str) -> float:
+        return (self.data.get(f"{strategy}:{symbol}") or {}).get("risk_scale", 1.0)
+
     def is_blocked(self, strategy: str, symbol: str) -> bool:
         """True if the runner must NOT trade this pair — the committee rejected/retired it, the
         decay monitor retired it, or forward reconciliation flagged drift (the promoted edge

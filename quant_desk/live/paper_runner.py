@@ -55,7 +55,7 @@ def run_forward_multi(mandates: list[dict], *, data_fn: Callable[[str], pd.DataF
         for s in m["symbols"]:
             strat[s].initialize()
         mlist.append({"name": m.get("name", ""), "symbols": m["symbols"], "strat": strat,
-                      "regime": m.get("regime_filter")})
+                      "regime": m.get("regime_filter"), "scales": m.get("risk_scales") or {}})
         all_symbols |= set(m["symbols"])
 
     data = {s: data_fn(s).sort_index() for s in all_symbols}
@@ -112,7 +112,8 @@ def run_forward_multi(mandates: list[dict], *, data_fn: Callable[[str], pd.DataF
                     if sig.side in ("long", "short") and rf and not rf.allows(window, sig.side):
                         continue
                     if sig.side in ("long", "short") and sig.stop is not None:
-                        dec = risk.evaluate(entry=float(bar["close"]), stop=float(sig.stop))
+                        dec = risk.evaluate(entry=float(bar["close"]), stop=float(sig.stop),
+                                            risk_scale=md["scales"].get(sym, 1.0))
                         notional = dec.qty * float(bar["close"])
                         if dec.allowed and (portfolio.gross_exposure(marks) + notional) <= max_gross * risk.equity:
                             f = broker.fill("buy" if sig.side == "long" else "sell", dec.qty, float(bar["close"]))

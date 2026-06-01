@@ -224,8 +224,11 @@ def cmd_paper_run(a) -> int:
         else:
             symbols = base_syms
         if symbols:
+            # apply the portfolio allocator's per-pair risk scale (1.0 if never allocated)
+            scales = {s: reg.risk_scale(strat, s) for s in symbols}
             mandates.append({"name": strat, "cls": strat_cls, "symbols": symbols,
-                             "params": params_by_symbol or {}, "regime_filter": rf})
+                             "params": params_by_symbol or {}, "regime_filter": rf,
+                             "risk_scales": scales})
     if not mandates:
         raise SystemExit("no symbols to trade (selection/gate returned empty)")
     pf = PaperPortfolio.load(PAPER_STATE)
@@ -358,6 +361,57 @@ def cmd_reconcile(a) -> int:
     return 0
 
 
+def cmd_allocate(a) -> int:
+    """Portfolio allocation: across the committee-approved pairs, measure how correlated their
+    edges are and set a diversification-aware per-pair risk weight the runner sizes against."""
+    from .monitor.registry import Registry
+    from .archive.journal import Journal
+    from .portfolio.allocate import session_returns, allocate
+    reg, jr = Registry.load(), Journal()
+    data_fn = _data_fn(a.interval, a.days)
+    rf = RegimeFilter() if a.regime else None
+    # the tradeable basket: every approved, non-blocked pair across the strategies
+    returns_by_pair: dict = {}
+    for strat in _strategies(a):
+        strat_cls = REGISTRY[strat]
+        syms = [k.split(":", 1)[1] for k in reg.data if k.startswith(f"{strat}:")
+                and reg.verdict(strat, k.split(":", 1)[1]) in ("promote", "paper_watch")
+                and not reg.is_blocked(strat, k.split(":", 1)[1])]
+        for sym in syms:
+            try:
+                res = run_backtest(data_fn(sym), strat_cls(), RiskEngine(), regime_filter=rf)
+                returns_by_pair[f"{strat}:{sym}"] = session_returns(res["trades"])
+            except Exception as e:
+                print(f"  {strat}:{sym} backtest error: {str(e)[:50]}")
+    if not returns_by_pair:
+        print("\n  no committee-approved pairs to allocate across — run review/reconcile first.")
+        return 0
+    alloc = allocate(returns_by_pair)
+    for pair, w in alloc["weights"].items():
+        strat, _, sym = pair.partition(":")
+        reg.set_allocation(strat, sym, w, alloc["scales"][pair])
+    reg.save()
+    jr.record("allocation", strategy=",".join(_strategies(a)), symbols=list(returns_by_pair),
+              summary=f"{len(returns_by_pair)} pairs · {alloc['method']} · {alloc['n_obs']} sessions",
+              decision=alloc["method"], payload={"weights": alloc["weights"], "scales": alloc["scales"],
+              "corr": alloc["corr"], "n_obs": alloc["n_obs"]})
+    jr.close()
+    print(f"\n=== PORTFOLIO ALLOCATION ({alloc['method']}, {alloc['n_obs']} shared sessions) ===")
+    print(f"  {'pair':18} {'weight':>8} {'risk×':>7}  avg|corr|")
+    pairs = list(alloc["weights"])
+    corr = alloc["corr"]
+    for p in pairs:
+        others = [abs(corr[p][q]) for q in pairs if q != p] or [0.0]
+        print(f"  {p:18} {alloc['weights'][p]*100:7.1f}% {alloc['scales'][p]:>6.2f}x   {sum(others)/len(others):.2f}")
+    if len(pairs) > 1:
+        print("\n  correlation matrix:")
+        print("  " + " " * 18 + " ".join(f"{p.split(':')[1][:6]:>7}" for p in pairs))
+        for p in pairs:
+            print(f"  {p:18} " + " ".join(f"{corr[p][q]:>7.2f}" for q in pairs))
+    print("\n  → weights written to the registry; the paper runner sizes against them.")
+    return 0
+
+
 def cmd_journal(a) -> int:
     from .archive.journal import Journal
     jr = Journal()
@@ -443,6 +497,10 @@ def main() -> int:
     rc.add_argument("--symbols", default=None, help="default: every committee-approved pair")
     rc.add_argument("--min-trades", type=int, default=8, dest="min_trades")
     rc.add_argument("--drift-fraction", type=float, default=0.6, dest="drift_fraction")
+    al = sub.add_parser("allocate"); al.set_defaults(fn=cmd_allocate)
+    al.add_argument("--strategy", default="orb,meanrev,vwap")
+    al.add_argument("--interval", default="5m"); al.add_argument("--days", type=int, default=58)
+    al.add_argument("--regime", action="store_true")
     rv = sub.add_parser("review"); rv.set_defaults(fn=cmd_review)
     rv.add_argument("--symbols", default="SPY,QQQ,IWM,AAPL,NVDA,MSFT")
     rv.add_argument("--strategy", default="orb"); rv.add_argument("--interval", default="5m")
