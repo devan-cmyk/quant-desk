@@ -65,13 +65,18 @@ def gate() -> dict:
     rows = []
     for key, e in sorted(reg.data.items()):
         strat, _, sym = key.partition(":")
+        blocked = reg.is_blocked(strat, sym)
         rows.append({
             "strategy": strat, "symbol": sym,
             "verdict": e.get("verdict"), "verdict_rationale": e.get("verdict_rationale"),
             "decay": e.get("status"), "recent_mean": e.get("recent_mean"),
             "forward": e.get("forward"), "forward_detail": e.get("forward_detail"),
             "weight": e.get("weight"), "risk_scale": e.get("risk_scale"),
-            "blocked": reg.is_blocked(strat, sym), "updated": e.get("updated"),
+            # what the runner ACTUALLY trades at: allocator base (default full) × probation halving.
+            # None when blocked (the pair won't trade at all). This is why a just-promoted pair shows
+            # 0.5, not null — it's on probation until forward-confirmed, even before `allocate` runs.
+            "effective_scale": None if blocked else reg.effective_scale(strat, sym),
+            "blocked": blocked, "updated": e.get("updated"),
         })
     # key by strategy:symbol — the same symbol can be promoted under several strategies
     tradeable = [f"{r['strategy']}:{r['symbol']}" for r in rows

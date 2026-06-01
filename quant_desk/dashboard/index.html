@@ -158,13 +158,17 @@ async function loadGate(){
            : p.decay==="retired" ? "decay monitor retired" : "blocked")
         : "trading";
       const status = p.blocked ? `<span class="pill kill">BLOCKED</span>` : `<span class="pill go">TRADING</span>`;
-      const alloc = (!p.blocked && p.risk_scale!=null)
-        ? `${(p.weight*100).toFixed(0)}% · ${p.risk_scale}×` : `<span class="mut">—</span>`;
+      // show what the runner ACTUALLY trades at: effective_scale (allocator base × probation
+      // halving). A just-promoted pair with no allocation yet still shows 0.5× (probation), not —.
+      const alloc = p.blocked ? `<span class="mut">—</span>`
+        : (p.weight!=null
+            ? `${(p.weight*100).toFixed(0)}% · ${p.effective_scale}×`
+            : `${p.effective_scale}× <span class="mut">(probation)</span>`);
       return [`<b>${p.symbol}</b>`, p.strategy, pill(p.verdict), pill(p.decay), pill(p.forward),
               status, alloc, `<span class="mut">${why||"—"}</span>`];
     });
     document.getElementById("gate").innerHTML = rows.length
-      ? tableC(["symbol","strategy","committee","decay","forward","runner","alloc (wt·risk×)","why"], rows, g.pairs)
+      ? tableC(["symbol","strategy","committee","decay","forward","runner","alloc (wt·eff×)","why"], rows, g.pairs)
       : `<div class="mut">empty — run <code>quant-desk review</code> then <code>quant-desk reconcile</code> to populate the gate</div>`;
   } catch(e){ document.getElementById("gate").innerHTML = `<div class="mut">—</div>`; }
 }
