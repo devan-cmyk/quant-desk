@@ -48,10 +48,22 @@ def test_gate_surfaces_the_three_kill_paths(tmp_path, monkeypatch):
 
     g = gate()
     by = {r["symbol"]: r for r in g["pairs"]}
-    assert by["SPY"]["blocked"] is False and "SPY" in g["tradeable"]
+    assert by["SPY"]["blocked"] is False and "orb:SPY" in g["tradeable"]
     assert by["QQQ"]["blocked"] is True and by["QQQ"]["forward"] == "drift"   # drift blocks
     assert by["AAPL"]["blocked"] is True and by["AAPL"]["decay"] == "retired" # decay blocks
-    assert g["n_blocked"] == 2 and g["tradeable"] == ["SPY"]
+    assert g["n_blocked"] == 2 and g["tradeable"] == ["orb:SPY"]   # strategy:symbol, unambiguous
+
+
+def test_gate_tradeable_disambiguates_same_symbol_across_strategies(tmp_path, monkeypatch):
+    from quant_desk.monitor.registry import Registry
+    from quant_desk.dashboard.app import gate
+    monkeypatch.setenv("QD_REGISTRY", str(tmp_path / "registry.json"))
+    reg = Registry.load()
+    reg.set_verdict("orb", "IWM", "promote", "ok")        # same symbol, two strategies
+    reg.set_verdict("meanrev", "IWM", "paper_watch", "ok")
+    reg.save()
+    g = gate()
+    assert sorted(g["tradeable"]) == ["meanrev:IWM", "orb:IWM"]   # both kept, no collision
 
 
 def test_allocation_endpoint_serves_latest_correlation(tmp_path, monkeypatch):

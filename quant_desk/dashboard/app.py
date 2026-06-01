@@ -72,7 +72,9 @@ def gate() -> dict:
             "weight": e.get("weight"), "risk_scale": e.get("risk_scale"),
             "blocked": reg.is_blocked(strat, sym), "updated": e.get("updated"),
         })
-    tradeable = [r["symbol"] for r in rows if not r["blocked"] and r["verdict"] in ("promote", "paper_watch")]
+    # key by strategy:symbol — the same symbol can be promoted under several strategies
+    tradeable = [f"{r['strategy']}:{r['symbol']}" for r in rows
+                 if not r["blocked"] and r["verdict"] in ("promote", "paper_watch")]
     return {"pairs": rows, "tradeable": tradeable,
             "n_blocked": sum(r["blocked"] for r in rows), "n_total": len(rows)}
 
