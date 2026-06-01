@@ -55,8 +55,17 @@ def run_backtest(df: pd.DataFrame, strategy: Strategy, risk: RiskEngine,
             else:
                 if bar["high"] >= pos["stop"]: exit_price, reason = pos["stop"], "stop"
                 elif bar["low"] <= pos["target"]: exit_price, reason = pos["target"], "target"
-            if exit_price is None and session_last:
-                exit_price, reason = bar["close"], "eod"
+            if exit_price is None:
+                last_bar = (i == n - 1)
+                if strategy.intraday:
+                    if session_last:                      # intraday: never hold past the close
+                        exit_price, reason = bar["close"], "eod"
+                else:                                      # swing: hold across days, cap the hold
+                    held = i - pos["entry_i"]
+                    if strategy.max_hold_bars and held >= strategy.max_hold_bars:
+                        exit_price, reason = bar["close"], "max_hold"
+                    elif last_bar:                         # always flatten at data end
+                        exit_price, reason = bar["close"], "eod"
             if exit_price is not None:
                 f = broker.fill("sell" if pos["side"] == "long" else "buy", pos["qty"], exit_price)
                 d = 1 if pos["side"] == "long" else -1
@@ -67,8 +76,9 @@ def run_backtest(df: pd.DataFrame, strategy: Strategy, risk: RiskEngine,
                                "reason": reason, "pnl": round(pnl, 2)})
                 pos = None
 
-        # 3. new entry (flat, not the session's last bar)
-        if pos is None and not session_last:
+        # 3. new entry — intraday: not on the session's last bar; swing: any bar but the data's last
+        allow_entry = (i < n - 1) if not strategy.intraday else (not session_last)
+        if pos is None and allow_entry:
             window = df.iloc[: i + 1]
             sig = strategy.generate_signal(window)
             # regime gate: veto signals that fight the prevailing trend (or fire in chop)
@@ -80,7 +90,7 @@ def run_backtest(df: pd.DataFrame, strategy: Strategy, risk: RiskEngine,
                     f = broker.fill("buy" if sig.side == "long" else "sell", dec.qty, float(bar["close"]))
                     pos = {"side": sig.side, "qty": dec.qty, "entry_fill": f.fill_price,
                            "entry_commission": f.commission, "stop": float(sig.stop),
-                           "target": float(sig.target), "entry_ts": ts}
+                           "target": float(sig.target), "entry_ts": ts, "entry_i": i}
 
     equity = pd.Series(curve_val, index=pd.DatetimeIndex(curve_ts), name="equity")
     metrics = compute_metrics(equity, trades)

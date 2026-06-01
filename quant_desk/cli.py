@@ -31,6 +31,8 @@ PARAM_GRIDS = {
     "vwap": {"target_r": [1.0, 1.5, 2.0], "touch": [0.0005, 0.001], "min_strength": [0.0, 0.4]},
     "meanrev": {"lookback": [20, 30], "entry_z": [2.0, 2.5], "stop_k": [1.0, 1.5], "min_strength": [0.0, 0.5]},
     "gapfade": {"min_gap": [0.002, 0.004], "stop_k": [1.0, 1.5]},
+    # daily swing mean-reversion (validated on 1d bars with long history + larger WF folds)
+    "dmr": {"lookback": [20, 30], "entry_z": [1.5, 2.0], "stop_k": [2.0, 3.0], "max_hold_bars": [5, 10]},
 }
 
 

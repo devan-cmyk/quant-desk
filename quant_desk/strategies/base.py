@@ -27,6 +27,8 @@ class Signal:
 class Strategy(ABC):
     name: str = "base"
     min_strength: float = 0.0      # conviction filter: drop signals weaker than this (0 = off)
+    intraday: bool = True          # True → flatten at session close; False → swing (multi-day hold)
+    max_hold_bars: int | None = None  # swing only: force-exit after this many bars (None = never)
 
     def initialize(self, ctx: dict | None = None) -> None:
         """Reset per-run state."""
