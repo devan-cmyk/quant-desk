@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>quant-desk · paper account</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  :root { --bg:#0b0e14; --card:#141a24; --line:#1f2733; --txt:#e6edf3; --mut:#7d8896;
+          --grn:#3fb950; --red:#f85149; --acc:#58a6ff; }
+  * { box-sizing:border-box; } body { margin:0; background:var(--bg); color:var(--txt);
+      font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif; }
+  .wrap { max-width:1100px; margin:0 auto; padding:24px; }
+  .banner { background:#1d2b1d; border:1px solid #2ea04326; color:var(--grn);
+            padding:8px 14px; border-radius:8px; font-weight:600; margin-bottom:20px; }
+  h1 { font-size:22px; margin:0 0 2px; } .sub { color:var(--mut); margin-bottom:20px; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; }
+  .card .l { color:var(--mut); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  .card .v { font-size:22px; font-weight:700; margin-top:4px; }
+  .pos { color:var(--grn); } .neg { color:var(--red); }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:20px; }
+  section h2 { font-size:15px; margin:0 0 12px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th,td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--mut); font-weight:600; font-size:11px; text-transform:uppercase; }
+  .mut { color:var(--mut); } .right { text-align:right; }
+  canvas { max-height:280px; }
+</style>
+</head>
+<body><div class="wrap">
+  <div class="banner" id="banner">● PAPER ONLY — live trading is locked</div>
+  <h1>quant-desk</h1><div class="sub" id="sub">forward paper account</div>
+
+  <div class="cards" id="cards"></div>
+  <section><h2>Equity curve (forward, out-of-sample)</h2><canvas id="eq"></canvas></section>
+  <section><h2>Open positions</h2><div id="positions"></div></section>
+  <section><h2>Per-symbol</h2><div id="bysym"></div></section>
+  <section><h2>Monte-Carlo on forward trades (is the edge holding?)</h2><div id="mc"></div></section>
+  <section><h2>Recent trades</h2><div id="blotter"></div></section>
+
+<script>
+const fmt = (x,d=2)=> x==null? "—" : Number(x).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d});
+const pct = x => x==null? "—" : (x*100).toFixed(2)+"%";
+const sign = x => x>0?"pos":x<0?"neg":"";
+
+async function load(){
+  const a = await (await fetch("/api/account")).json();
+  document.getElementById("banner").textContent = a.live_locked
+    ? "● PAPER ONLY — live trading is locked" : "⚠ LIVE MODE";
+  document.getElementById("sub").textContent = "forward paper account · last bar " + (a.last_ts||"—");
+
+  const cards = [
+    ["Equity", "$"+fmt(a.equity)],
+    ["Total return", pct(a.total_return), sign(a.total_return)],
+    ["Trades", a.n_trades],
+    ["Win rate", a.win_rate==null?"—":pct(a.win_rate)],
+    ["Open positions", Object.keys(a.open_positions).length],
+    ["P(profit) MC", a.monte_carlo.prob_profit==null?"—":pct(a.monte_carlo.prob_profit)],
+    ["P(ruin) MC", a.monte_carlo.prob_ruin==null?"—":pct(a.monte_carlo.prob_ruin), a.monte_carlo.prob_ruin>0?"neg":""],
+  ];
+  document.getElementById("cards").innerHTML = cards.map(([l,v,c])=>
+    `<div class="card"><div class="l">${l}</div><div class="v ${c||''}">${v}</div></div>`).join("");
+
+  // equity chart
+  const ec = a.equity_curve || [];
+  new Chart(document.getElementById("eq"), { type:"line",
+    data:{ labels: ec.map(p=>p[0].slice(5,16)),
+      datasets:[{ data: ec.map(p=>p[1]), borderColor:"#58a6ff", borderWidth:1.5,
+        pointRadius:0, fill:true, backgroundColor:"#58a6ff14", tension:.15 }]},
+    options:{ plugins:{legend:{display:false}}, scales:{
+      x:{ticks:{color:"#7d8896",maxTicksLimit:8},grid:{color:"#1f2733"}},
+      y:{ticks:{color:"#7d8896"},grid:{color:"#1f2733"}}}}});
+
+  // open positions
+  const op = Object.entries(a.open_positions);
+  document.getElementById("positions").innerHTML = op.length ? table(
+    ["symbol","side","qty","entry","stop","target"],
+    op.map(([s,p])=>[s,p.side,p.qty,fmt(p.entry),fmt(p.stop),fmt(p.target)])) :
+    `<div class="mut">flat — no open positions</div>`;
+
+  // per-symbol
+  const bs = Object.entries(a.by_symbol||{});
+  document.getElementById("bysym").innerHTML = bs.length ? table(
+    ["symbol","trades","wins","net pnl"],
+    bs.map(([s,d])=>[s,d.trades,d.wins,`<span class="${sign(d.pnl)}">${fmt(d.pnl)}</span>`])) :
+    `<div class="mut">no trades yet</div>`;
+
+  // monte carlo
+  const m=a.monte_carlo;
+  document.getElementById("mc").innerHTML = m.prob_profit==null ? `<div class="mut">${m.note||"—"}</div>` :
+    table(["return p5","return p50","return p95","worst DD","P(profit)","P(ruin)","expectancy/trade"],
+      [[pct(m.return_p05),pct(m.return_p50),pct(m.return_p95),pct(m.maxdd_p95_worst),
+        pct(m.prob_profit),pct(m.prob_ruin),"$"+fmt(m.expectancy)]]);
+
+  // blotter
+  const b=a.blotter||[];
+  document.getElementById("blotter").innerHTML = b.length ? table(
+    ["exit time","symbol","side","qty","entry→exit","reason","pnl"],
+    b.map(t=>[t.exit_ts?.slice(5,16),t.symbol,t.side,t.qty,`${fmt(t.entry)}→${fmt(t.exit)}`,t.reason,
+      `<span class="${sign(t.pnl)}">${fmt(t.pnl)}</span>`])) :
+    `<div class="mut">no closed trades yet</div>`;
+}
+function table(head, rows){
+  return `<table><thead><tr>${head.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${
+    rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+}
+load(); setInterval(load, 30000);
+</script>
+</div></body></html>

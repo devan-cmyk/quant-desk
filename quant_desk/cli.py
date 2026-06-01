@@ -165,6 +165,16 @@ def cmd_paper_run(a) -> int:
     return 0
 
 
+def cmd_dashboard(a) -> int:
+    try:
+        import uvicorn
+    except ImportError:
+        raise SystemExit("dashboard needs extras: uv pip install -e '.[dashboard]'")
+    print(f"quant-desk dashboard → http://{a.host}:{a.port}  (paper account, read-only)")
+    uvicorn.run("quant_desk.dashboard.app:app", host=a.host, port=a.port, log_level="warning")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="quant-desk")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -208,6 +218,8 @@ def main() -> int:
     pr.add_argument("--select", action="store_true", help="trade only the qualified universe")
     pr.add_argument("--regime", action="store_true")
     pr.add_argument("--max-bars", type=int, default=78, dest="max_bars", help="forward bars to process")
+    db = sub.add_parser("dashboard"); db.set_defaults(fn=cmd_dashboard)
+    db.add_argument("--host", default="127.0.0.1"); db.add_argument("--port", type=int, default=8800)
     a = ap.parse_args()
     configure(settings.log_level)
     return a.fn(a)
