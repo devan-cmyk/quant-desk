@@ -65,9 +65,12 @@ account it hasn't cleared, and approval is revoked the moment an edge decays. In
 
 **Daily swing loop (`dmr` — daily mean-reversion).** A parallel agent set runs the same loop on
 **1-day bars** (730d history, larger walk-forward folds), offset in time so it never races the
-5-minute agents on the shared registry/account. Index ETFs only (survivorship-safe), and **no
-regime filter** (mean-reversion is contrarian — the trend gate would veto its entries). This is
-the project's first cost-robust edge: SPY/IWM survive the 2× cost gate out-of-sample.
+5-minute agents on the shared registry/account. **No regime filter** (mean-reversion is
+contrarian — the trend gate would veto its entries) and a **mandatory volatility circuit-breaker**
+(it stands aside in a vol blow-up; justified by 33-yr out-of-sample evidence, not the optimizer).
+This is the project's first cost-robust edge: across a diversified daily universe (indices,
+sectors, bonds) the committee currently clears **SPY, IWM, XLK, XLP (paper_watch) and XLF, TLT
+(promote)** through the 2× cost gate out-of-sample — TLT (bonds) a genuine cross-asset diversifier.
 
 | Agent | When | Does |
 |---|---|---|
