@@ -50,6 +50,18 @@ def account() -> dict:
     }
 
 
+@app.get("/api/journal")
+def journal(n: int = 30) -> dict:
+    from ..archive.journal import Journal
+    jr = Journal()
+    rows = jr.recent(n)
+    total = jr.count()
+    jr.close()
+    return {"total": total, "entries": [
+        {"ts": r["ts"], "kind": r["kind"], "strategy": r["strategy"],
+         "summary": r["summary"], "decision": r["decision"]} for r in rows]}
+
+
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
     return open(os.path.join(HERE, "index.html")).read()

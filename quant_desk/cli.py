@@ -148,6 +148,19 @@ def cmd_monitor(a) -> int:
     reg = Registry.load()
     changes = reg.update(a.strategy, assessments)
     reg.save()
+    # journal the run + an immutable record for each retirement/recovery decision
+    from .archive.journal import Journal
+    jr = Journal()
+    nh = sum(r["status"] == "healthy" for r in assessments)
+    nr = sum(r["status"] == "retired" for r in assessments)
+    jr.record("monitor", strategy=a.strategy, symbols=[r["symbol"] for r in assessments],
+              summary=f"{nh} healthy, {nr} retired", payload={"assessments": assessments})
+    for c in changes:
+        kind = "retirement" if c["to"] == "retired" else "recovery"
+        jr.record(kind, strategy=a.strategy, symbols=[c["symbol"]],
+                  summary=f"{c['symbol']}: {c['from']} → {c['to']}",
+                  decision=("edge decayed — retired" if c["to"] == "retired" else "edge recovered"))
+    jr.close()
     icon = {"healthy": "✅", "watch": "⚠️", "retired": "💀", "insufficient_data": "·", "error": "✗"}
     num = lambda v, p: (format(v, p) if v is not None else "—")
     print(f"\n=== EDGE-DECAY MONITOR: {a.strategy.upper()}{' +regime' if rf else ''} ===")
@@ -209,12 +222,36 @@ def cmd_paper_run(a) -> int:
     res = run_forward(symbols, strat_cls, data_fn=data_fn, portfolio=pf, regime_filter=rf,
                       params_by_symbol=params_by_symbol, max_bars=a.max_bars)
     pf.save(PAPER_STATE)
+    from .archive.journal import Journal
+    jr = Journal()
+    jr.record("paper_run", strategy=a.strategy, symbols=symbols,
+              summary=f"{res['bars_processed']} bars · equity {res['equity']} · {res['blotter_n']} total trades",
+              payload={"bars": res["bars_processed"], "equity": res["equity"],
+                       "open_positions": list(res["open_positions"])})
+    jr.close()
     print(f"\n=== PAPER RUN (forward, paper-only) — {symbols} ===")
     print(json.dumps({k: v for k, v in res.items() if k != "actions"}, indent=2, default=str))
     print(f"\nrecent actions ({len(res['actions'])}):")
     for act in res["actions"][-10:]:
         print(f"  {act['ts']} {act['symbol']:6} {act['act']}" + (f"  pnl={act['pnl']:+.2f}" if "pnl" in act else f"  x{act.get('qty')}"))
     print(f"\nstate persisted → {PAPER_STATE}  (run again to continue the same paper account)")
+    return 0
+
+
+def cmd_journal(a) -> int:
+    from .archive.journal import Journal
+    jr = Journal()
+    rows = jr.recent(a.n, kind=a.kind)
+    print(f"\n=== RESEARCH & DECISION JOURNAL ({jr.count()} total records, append-only) ===")
+    icon = {"monitor": "🔍", "retirement": "💀", "recovery": "🌱", "paper_run": "📈",
+            "backtest": "🧪", "walkforward": "🚶", "stress": "🌪", "montecarlo": "🎲", "multisymbol": "🗂"}
+    for r in rows:
+        when = r["ts"][:16].replace("T", " ")
+        print(f"  {when}  {icon.get(r['kind'], '·')} {r['kind']:11} {r['strategy']:5} "
+              f"{r['summary']}" + (f"  → {r['decision']}" if r["decision"] else ""))
+    if not rows:
+        print("  (empty — runs are recorded as the monitor/paper-run/stress tools execute)")
+    jr.close()
     return 0
 
 
@@ -273,6 +310,8 @@ def main() -> int:
     pr.add_argument("--max-bars", type=int, default=78, dest="max_bars", help="forward bars to process")
     db = sub.add_parser("dashboard"); db.set_defaults(fn=cmd_dashboard)
     db.add_argument("--host", default="127.0.0.1"); db.add_argument("--port", type=int, default=8800)
+    jo = sub.add_parser("journal"); jo.set_defaults(fn=cmd_journal)
+    jo.add_argument("-n", type=int, default=40); jo.add_argument("--kind", default=None)
     mo = sub.add_parser("monitor"); mo.set_defaults(fn=cmd_monitor)
     mo.add_argument("--symbols", default="SPY,QQQ,IWM,AAPL,NVDA,MSFT")
     mo.add_argument("--strategy", default="orb"); mo.add_argument("--interval", default="5m")

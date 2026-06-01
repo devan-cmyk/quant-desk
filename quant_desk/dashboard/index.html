@@ -37,6 +37,7 @@
   <section><h2>Per-symbol</h2><div id="bysym"></div></section>
   <section><h2>Monte-Carlo on forward trades (is the edge holding?)</h2><div id="mc"></div></section>
   <section><h2>Recent trades</h2><div id="blotter"></div></section>
+  <section><h2>Research &amp; decision journal (append-only audit trail)</h2><div id="journal"></div></section>
 
 <script>
 const fmt = (x,d=2)=> x==null? "—" : Number(x).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -104,6 +105,17 @@ function table(head, rows){
   return `<table><thead><tr>${head.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${
     rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
 }
-load(); setInterval(load, 30000);
+async function loadJournal(){
+  try {
+    const j = await (await fetch("/api/journal?n=25")).json();
+    const ic = {monitor:"🔍",retirement:"💀",recovery:"🌱",paper_run:"📈",backtest:"🧪",stress:"🌪",walkforward:"🚶",montecarlo:"🎲",multisymbol:"🗂"};
+    document.getElementById("journal").innerHTML = (j.entries||[]).length ? table(
+      ["when","event","strategy","summary"],
+      j.entries.map(e=>[e.ts.slice(0,16).replace("T"," "), `${ic[e.kind]||"·"} ${e.kind}`, e.strategy||"—",
+        e.summary + (e.decision?` <span class="mut">→ ${e.decision}</span>`:"")])) :
+      `<div class="mut">empty — records accrue as the monitor / paper-run / stress tools execute</div>`;
+  } catch(e){ document.getElementById("journal").innerHTML = `<div class="mut">—</div>`; }
+}
+load(); loadJournal(); setInterval(()=>{load();loadJournal();}, 30000);
 </script>
 </div></body></html>
