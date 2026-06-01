@@ -6,10 +6,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 
 from .backtest.engine import run_backtest
 from .backtest.walkforward import walk_forward
 from .backtest.multisymbol import multi_symbol_walkforward
+from .selection.selector import select_symbols
+from .live.portfolio import PaperPortfolio
+from .live.paper_runner import run_forward
 from .config import settings
 from .data.yfinance_provider import YFinanceProvider
 from .logging import configure, get
@@ -104,6 +108,59 @@ def cmd_multisymbol(a) -> int:
     return 0
 
 
+PAPER_STATE = os.path.expanduser("~/.quant-desk/paper_state.json")
+
+
+def _data_fn(interval, days):
+    prov = YFinanceProvider()
+    return lambda sym: prov.bars(sym, interval=interval, lookback_days=days)
+
+
+def cmd_select(a) -> int:
+    strat_cls = REGISTRY[a.strategy]
+    symbols = [s.strip().upper() for s in a.symbols.split(",") if s.strip()]
+    rf = RegimeFilter() if a.regime else None
+    res = select_symbols(symbols, strat_cls, PARAM_GRIDS.get(a.strategy, {}),
+                         data_fn=_data_fn(a.interval, a.days), regime_filter=rf,
+                         is_sessions=a.is_sessions, oos_sessions=a.oos_sessions)
+    print(f"\n=== SYMBOL SELECTION: {a.strategy.upper()}{' +regime' if rf else ''} ===")
+    print(f"  {'symbol':8} {'OOS ret':>9} {'PF':>6} {'trades':>7}  qualified")
+    for r in res["ranking"]:
+        if "error" in r:
+            print(f"  {r['symbol']:8} ERROR"); continue
+        pf = f"{r['profit_factor']:.2f}" if r["profit_factor"] is not None else " n/a"
+        print(f"  {r['symbol']:8} {r['oos_return']:+9.4f} {pf:>6} {r['trades']:>7}  {'✅' if r['qualified'] else '—'}")
+    print(f"\n  QUALIFIED UNIVERSE: {res['qualified'] or '(none cleared the bar)'}")
+    return 0
+
+
+def cmd_paper_run(a) -> int:
+    strat_cls = REGISTRY[a.strategy]
+    data_fn = _data_fn(a.interval, a.days)
+    rf = RegimeFilter() if a.regime else None
+    if a.select:
+        sel = select_symbols([s.strip().upper() for s in a.symbols.split(",") if s.strip()],
+                             strat_cls, PARAM_GRIDS.get(a.strategy, {}), data_fn=data_fn,
+                             regime_filter=rf, is_sessions=a.is_sessions, oos_sessions=a.oos_sessions)
+        symbols = sel["qualified"]
+        print(f"selected universe: {symbols or '(none)'}")
+    else:
+        symbols = [s.strip().upper() for s in a.symbols.split(",") if s.strip()]
+    if not symbols:
+        raise SystemExit("no symbols to trade (selection returned empty)")
+    pf = PaperPortfolio.load(PAPER_STATE)
+    res = run_forward(symbols, strat_cls, data_fn=data_fn, portfolio=pf, regime_filter=rf,
+                      max_bars=a.max_bars)
+    pf.save(PAPER_STATE)
+    print(f"\n=== PAPER RUN (forward, paper-only) — {symbols} ===")
+    print(json.dumps({k: v for k, v in res.items() if k != "actions"}, indent=2, default=str))
+    print(f"\nrecent actions ({len(res['actions'])}):")
+    for act in res["actions"][-10:]:
+        print(f"  {act['ts']} {act['symbol']:6} {act['act']}" + (f"  pnl={act['pnl']:+.2f}" if "pnl" in act else f"  x{act.get('qty')}"))
+    print(f"\nstate persisted → {PAPER_STATE}  (run again to continue the same paper account)")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="quant-desk")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -131,6 +188,22 @@ def main() -> int:
     ms.add_argument("--is-sessions", type=int, default=15, dest="is_sessions")
     ms.add_argument("--oos-sessions", type=int, default=5, dest="oos_sessions")
     ms.add_argument("--regime", action="store_true", help="gate signals with the trend/chop filter")
+    sl = sub.add_parser("select"); sl.set_defaults(fn=cmd_select)
+    sl.add_argument("--symbols", default="SPY,QQQ,IWM,AAPL,NVDA,MSFT")
+    sl.add_argument("--strategy", default="orb"); sl.add_argument("--interval", default="5m")
+    sl.add_argument("--days", type=int, default=58)
+    sl.add_argument("--is-sessions", type=int, default=15, dest="is_sessions")
+    sl.add_argument("--oos-sessions", type=int, default=5, dest="oos_sessions")
+    sl.add_argument("--regime", action="store_true")
+    pr = sub.add_parser("paper-run"); pr.set_defaults(fn=cmd_paper_run)
+    pr.add_argument("--symbols", default="SPY,QQQ,IWM,AAPL,NVDA,MSFT")
+    pr.add_argument("--strategy", default="orb"); pr.add_argument("--interval", default="5m")
+    pr.add_argument("--days", type=int, default=58)
+    pr.add_argument("--is-sessions", type=int, default=15, dest="is_sessions")
+    pr.add_argument("--oos-sessions", type=int, default=5, dest="oos_sessions")
+    pr.add_argument("--select", action="store_true", help="trade only the qualified universe")
+    pr.add_argument("--regime", action="store_true")
+    pr.add_argument("--max-bars", type=int, default=78, dest="max_bars", help="forward bars to process")
     a = ap.parse_args()
     configure(settings.log_level)
     return a.fn(a)
