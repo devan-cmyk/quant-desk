@@ -4,37 +4,68 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>quant-desk · paper account</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
 <style>
-  :root { --bg:#0b0e14; --card:#141a24; --line:#1f2733; --txt:#e6edf3; --mut:#7d8896;
+  :root { --bg:#070a10; --card:20,26,36; --line:#1f2733; --txt:#e6edf3; --mut:#7d8896;
           --grn:#3fb950; --red:#f85149; --acc:#58a6ff; }
-  * { box-sizing:border-box; } body { margin:0; background:var(--bg); color:var(--txt);
+  * { box-sizing:border-box; } html,body{ height:100%; }
+  body { margin:0; background:var(--bg); color:var(--txt); overflow-x:hidden;
       font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif; }
-  .wrap { max-width:1100px; margin:0 auto; padding:24px; }
-  .banner { background:#1d2b1d; border:1px solid #2ea04326; color:var(--grn);
-            padding:8px 14px; border-radius:8px; font-weight:600; margin-bottom:20px; }
-  h1 { font-size:22px; margin:0 0 2px; } .sub { color:var(--mut); margin-bottom:20px; }
+  /* WebGL scene sits behind everything; a soft vignette keeps text legible over it */
+  #bg { position:fixed; inset:0; width:100%; height:100%; z-index:0; display:block; }
+  body::after { content:""; position:fixed; inset:0; z-index:1; pointer-events:none;
+      background:radial-gradient(120% 90% at 50% -10%, transparent 40%, rgba(7,10,16,.55) 100%); }
+  .wrap { position:relative; z-index:2; max-width:1100px; margin:0 auto; padding:24px;
+      perspective:1400px; }
+  .banner { background:rgba(29,43,29,.55); border:1px solid #2ea04340; color:var(--grn);
+            backdrop-filter:blur(10px); padding:9px 14px; border-radius:10px; font-weight:600;
+            margin-bottom:20px; box-shadow:0 0 24px #2ea04318; }
+  h1 { font-size:26px; margin:0 0 2px; letter-spacing:-.01em;
+       background:linear-gradient(90deg,#e6edf3,#58a6ff); -webkit-background-clip:text;
+       background-clip:text; -webkit-text-fill-color:transparent; }
+  .sub { color:var(--mut); margin-bottom:20px; }
   .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:20px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; }
+  /* glassmorphic panels — translucent, blurred, with an accent edge-glow */
+  .card, section { background:rgba(var(--card),.62);
+      border:1px solid rgba(88,166,255,.14); border-radius:14px;
+      backdrop-filter:blur(16px) saturate(135%); -webkit-backdrop-filter:blur(16px) saturate(135%);
+      box-shadow:0 8px 30px rgba(0,0,0,.40), inset 0 1px 0 rgba(255,255,255,.04);
+      transition:transform .18s cubic-bezier(.2,.7,.2,1), box-shadow .25s, border-color .25s;
+      will-change:transform; }
+  .card { padding:16px; }
+  section { padding:18px; margin-bottom:20px; }
+  .card:hover, section:hover { border-color:rgba(88,166,255,.40);
+      box-shadow:0 14px 50px rgba(0,0,0,.5), 0 0 36px rgba(88,166,255,.14),
+                 inset 0 1px 0 rgba(255,255,255,.06); }
   .card .l { color:var(--mut); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
-  .card .v { font-size:22px; font-weight:700; margin-top:4px; }
+  .card .v { font-size:24px; font-weight:700; margin-top:4px; font-variant-numeric:tabular-nums;
+             text-shadow:0 0 18px rgba(88,166,255,.18); }
   .pos { color:var(--grn); } .neg { color:var(--red); }
-  section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:20px; }
   section h2 { font-size:15px; margin:0 0 12px; }
   table { width:100%; border-collapse:collapse; font-size:13px; }
   th,td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); }
   th { color:var(--mut); font-weight:600; font-size:11px; text-transform:uppercase; }
+  tbody tr { transition:background .15s; } tbody tr:hover td { background:rgba(88,166,255,.06); }
   .mut { color:var(--mut); } .right { text-align:right; }
-  canvas { max-height:280px; }
+  canvas#eq { max-height:280px; }
   .pill { display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600;
           border:1px solid transparent; }
-  .pill.go  { background:#1d2b1d; color:var(--grn); border-color:#2ea04340; }
+  .pill.go  { background:#1d2b1d; color:var(--grn); border-color:#2ea04340; box-shadow:0 0 12px #2ea04322; }
   .pill.warn{ background:#2b2718; color:#d29922; border-color:#bb800940; }
   .pill.kill{ background:#2b1a1a; color:var(--red); border-color:#f8514940; }
   .pill.off { background:#161b22; color:var(--mut); border-color:var(--line); }
   tr.blocked td { background:#f851490a; }
+  /* fade panels in on first paint */
+  .wrap > * { animation:rise .6s cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes rise { from{ opacity:0; transform:translateY(14px); } to{ opacity:1; transform:none; } }
+  @media (prefers-reduced-motion: reduce){ .wrap>*{animation:none;} #bg{opacity:.4;} }
 </style>
 </head>
-<body><div class="wrap">
+<body>
+<canvas id="bg"></canvas>
+<div class="wrap">
   <div class="banner" id="banner">● PAPER ONLY — live trading is locked</div>
   <h1>quant-desk</h1><div class="sub" id="sub">forward paper account</div>
 
@@ -53,14 +84,110 @@
   <section><h2>Monte-Carlo on forward trades (is the edge holding?)</h2><div id="mc"></div></section>
   <section><h2>Recent trades</h2><div id="blotter"></div></section>
   <section><h2>Research &amp; decision journal (append-only audit trail)</h2><div id="journal"></div></section>
+</div>
+
+<!-- ── WebGL background: a slow particle field + flowing wireframe shell, parallax to the
+     mouse, tinted to the account's P&L mood (green up / red down / blue neutral) ── -->
+<script type="module">
+import * as THREE from 'three';
+window.__qdReturn = 0;   // updated by load() — drives the scene's mood color
+const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const cv = document.getElementById('bg');
+const renderer = new THREE.WebGLRenderer({ canvas:cv, alpha:true, antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 100);
+camera.position.z = 14;
+
+// particle field
+const N = 1800, pos = new Float32Array(N*3);
+for(let i=0;i<N*3;i++) pos[i] = (Math.random()-0.5) * 46;
+const pg = new THREE.BufferGeometry();
+pg.setAttribute('position', new THREE.BufferAttribute(pos,3));
+const pm = new THREE.PointsMaterial({ size:0.06, color:0x58a6ff, transparent:true,
+  opacity:0.85, blending:THREE.AdditiveBlending, depthWrite:false });
+const points = new THREE.Points(pg, pm); scene.add(points);
+
+// flowing wireframe shell around the field
+const shell = new THREE.Mesh(
+  new THREE.IcosahedronGeometry(11, 2),
+  new THREE.MeshBasicMaterial({ color:0x58a6ff, wireframe:true, transparent:true, opacity:0.06 }));
+scene.add(shell);
+const knot = new THREE.Mesh(
+  new THREE.TorusKnotGeometry(3.4, 0.5, 160, 20),
+  new THREE.MeshBasicMaterial({ color:0x58a6ff, wireframe:true, transparent:true, opacity:0.10 }));
+scene.add(knot);
+
+const mouse = {x:0,y:0}, target = {x:0,y:0};
+addEventListener('pointermove', e=>{ target.x=(e.clientX/innerWidth-0.5); target.y=(e.clientY/innerHeight-0.5); });
+addEventListener('resize', ()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight); });
+renderer.setSize(innerWidth, innerHeight);
+
+const cNeutral=new THREE.Color(0x58a6ff), cUp=new THREE.Color(0x3fb950), cDown=new THREE.Color(0xf85149);
+const cur=new THREE.Color(0x58a6ff);
+function moodColor(){ const r=window.__qdReturn||0;
+  const t=Math.max(-1,Math.min(1, r*60));   // ~±1.7% saturates the tint
+  return t>=0 ? cNeutral.clone().lerp(cUp,t) : cNeutral.clone().lerp(cDown,-t); }
+
+let t=0;
+function frame(){
+  requestAnimationFrame(frame);
+  t += reduce ? 0 : 0.0016;
+  mouse.x += (target.x-mouse.x)*0.04; mouse.y += (target.y-mouse.y)*0.04;
+  points.rotation.y = t*0.6; points.rotation.x = t*0.25;
+  shell.rotation.y = -t*0.4; shell.rotation.x = t*0.2;
+  knot.rotation.z = t*0.8; knot.rotation.x = t*0.5;
+  camera.position.x += (mouse.x*4 - camera.position.x)*0.05;
+  camera.position.y += (-mouse.y*4 - camera.position.y)*0.05;
+  camera.lookAt(0,0,0);
+  cur.lerp(moodColor(), 0.03); pm.color.copy(cur); shell.material.color.copy(cur); knot.material.color.copy(cur);
+  renderer.render(scene, camera);
+}
+frame();
+</script>
+
+<!-- ── interactive 3D card tilt: panels lean toward the cursor ── -->
+<script>
+(function(){
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  function bind(el){
+    el.addEventListener('pointermove', e=>{
+      const r=el.getBoundingClientRect();
+      const px=(e.clientX-r.left)/r.width-0.5, py=(e.clientY-r.top)/r.height-0.5;
+      el.style.transform=`rotateX(${(-py*5).toFixed(2)}deg) rotateY(${(px*5).toFixed(2)}deg) translateY(-3px)`;
+    });
+    el.addEventListener('pointerleave', ()=>{ el.style.transform=''; });
+  }
+  // re-bind after each data refresh (cards are re-rendered)
+  const obs=new MutationObserver(()=>document.querySelectorAll('.card:not([data-tilt]),section:not([data-tilt])')
+    .forEach(el=>{ el.setAttribute('data-tilt','1'); bind(el); }));
+  obs.observe(document.body,{childList:true,subtree:true});
+})();
+</script>
 
 <script>
 const fmt = (x,d=2)=> x==null? "—" : Number(x).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d});
 const pct = x => x==null? "—" : (x*100).toFixed(2)+"%";
 const sign = x => x>0?"pos":x<0?"neg":"";
 
+// count-up: tween the numeric part of a card value when it changes between refreshes
+const __prev = {};
+function countUp(el, label, text){
+  const m = String(text).match(/-?[\d,]+\.?\d*/);
+  if(!m){ el.textContent = text; return; }
+  const target = parseFloat(m[0].replace(/,/g,'')); const pre=text.slice(0,m.index), post=text.slice(m.index+m[0].length);
+  const decs=(m[0].split('.')[1]||'').length; const from = __prev[label]==null? target : __prev[label]; __prev[label]=target;
+  if(from===target || window.matchMedia('(prefers-reduced-motion: reduce)').matches){ el.textContent=text; return; }
+  const t0=performance.now(), dur=600;
+  (function step(now){ const k=Math.min(1,(now-t0)/dur); const e=1-Math.pow(1-k,3); const v=from+(target-from)*e;
+    el.textContent = pre + v.toLocaleString(undefined,{minimumFractionDigits:decs,maximumFractionDigits:decs}) + post;
+    if(k<1) requestAnimationFrame(step); })(t0);
+}
+
 async function load(){
   const a = await (await fetch("/api/account")).json();
+  window.__qdReturn = a.total_return || 0;     // feed the WebGL mood color
   document.getElementById("banner").textContent = a.live_locked
     ? "● PAPER ONLY — live trading is locked" : "⚠ LIVE MODE";
   document.getElementById("sub").textContent = "forward paper account · last bar " + (a.last_ts||"—");
@@ -75,17 +202,21 @@ async function load(){
     ["P(ruin) MC", a.monte_carlo.prob_ruin==null?"—":pct(a.monte_carlo.prob_ruin), a.monte_carlo.prob_ruin>0?"neg":""],
   ];
   document.getElementById("cards").innerHTML = cards.map(([l,v,c])=>
-    `<div class="card"><div class="l">${l}</div><div class="v ${c||''}">${v}</div></div>`).join("");
+    `<div class="card"><div class="l">${l}</div><div class="v ${c||''}" data-l="${l}"></div></div>`).join("");
+  cards.forEach(([l,v])=>{ const el=document.querySelector(`.v[data-l="${l}"]`); if(el) countUp(el,l,String(v)); });
 
   // equity chart
   const ec = a.equity_curve || [];
-  new Chart(document.getElementById("eq"), { type:"line",
+  if(window.__eqChart) window.__eqChart.destroy();
+  window.__eqChart = new Chart(document.getElementById("eq"), { type:"line",
     data:{ labels: ec.map(p=>p[0].slice(5,16)),
-      datasets:[{ data: ec.map(p=>p[1]), borderColor:"#58a6ff", borderWidth:1.5,
-        pointRadius:0, fill:true, backgroundColor:"#58a6ff14", tension:.15 }]},
-    options:{ plugins:{legend:{display:false}}, scales:{
-      x:{ticks:{color:"#7d8896",maxTicksLimit:8},grid:{color:"#1f2733"}},
-      y:{ticks:{color:"#7d8896"},grid:{color:"#1f2733"}}}}});
+      datasets:[{ data: ec.map(p=>p[1]), borderColor:"#58a6ff", borderWidth:1.8,
+        pointRadius:0, fill:true, tension:.15,
+        backgroundColor:(ctx)=>{ const g=ctx.chart.ctx.createLinearGradient(0,0,0,280);
+          g.addColorStop(0,"#58a6ff44"); g.addColorStop(1,"#58a6ff02"); return g; } }]},
+    options:{ animation:{duration:900}, plugins:{legend:{display:false}}, scales:{
+      x:{ticks:{color:"#7d8896",maxTicksLimit:8},grid:{color:"#1f273366"}},
+      y:{ticks:{color:"#7d8896"},grid:{color:"#1f273366"}}}}});
 
   // open positions
   const op = Object.entries(a.open_positions);
@@ -229,4 +360,4 @@ async function loadAllocation(){
 load(); loadAlerts(); loadGate(); loadAllocation(); loadJournal();
 setInterval(()=>{load();loadAlerts();loadGate();loadAllocation();loadJournal();}, 30000);
 </script>
-</div></body></html>
+</body></html>
