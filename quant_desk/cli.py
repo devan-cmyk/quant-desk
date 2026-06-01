@@ -274,7 +274,7 @@ def cmd_evaluate(a) -> int:
     df = YFinanceProvider().bars(a.symbol, interval=a.interval, lookback_days=a.days)
     rf = RegimeFilter() if a.regime else None
     res = evaluate(df, strat_cls, PARAM_GRIDS.get(a.strategy, {}), regime_filter=rf,
-                   is_sessions=a.is_sessions, oos_sessions=a.oos_sessions)
+                   is_sessions=a.is_sessions, oos_sessions=a.oos_sessions, symbol=a.symbol)
     if res.get("error"):
         raise SystemExit(res["error"])
     ev, c = res["evidence"], res["council"]
@@ -320,7 +320,7 @@ def cmd_review(a) -> int:
         for sym in symbols:
             try:
                 res = evaluate(data_fn(sym), strat_cls, PARAM_GRIDS.get(strat, {}), regime_filter=rf,
-                               is_sessions=a.is_sessions, oos_sessions=a.oos_sessions)
+                               is_sessions=a.is_sessions, oos_sessions=a.oos_sessions, symbol=sym)
             except Exception as e:
                 print(f"  {sym:6} error: {str(e)[:60]}"); continue
             if res.get("error"):
@@ -501,20 +501,25 @@ def cmd_cost_curve(a) -> int:
     symbols = [s.strip().upper() for s in a.symbols.split(",") if s.strip()]
     print(f"\n=== COST MARGIN OF SAFETY: {a.strategy.upper()}{' +regime' if rf else ''} "
           f"({a.interval}, {a.days}d) — how much cost each edge absorbs before breakeven ===")
-    print(f"  {'symbol':7} {'trades':>6} {'net%':>7} {'margin':>7} {'tolerates':>9}  verdict")
+    from .costs import cost_profile
+    from .execution.paper_broker import PaperBroker
+    print(f"  {'symbol':9} {'class':6} {'trades':>6} {'net%':>7} {'margin':>7} {'tolerates':>9}  verdict")
     for sym in symbols:
+        prof = cost_profile(sym)   # crypto fills + gate at ~30bps; equities at 2bps
         try:
-            res = run_backtest(data_fn(sym), strat_cls(), RiskEngine(), regime_filter=rf)
+            broker = PaperBroker(slippage_bps=prof["slippage_bps"], commission_per_share=prof["commission_per_share"])
+            res = run_backtest(data_fn(sym), strat_cls(), RiskEngine(), broker=broker, regime_filter=rf)
         except Exception as e:
-            print(f"  {sym:7} error: {str(e)[:50]}"); continue
-        cc = cost_curve(res["trades"])
+            print(f"  {sym:9} error: {str(e)[:50]}"); continue
+        cc = cost_curve(res["trades"], slippage_bps=prof["slippage_bps"], commission_per_share=prof["commission_per_share"])
         m = cc["margin"]
         verdict = ("no edge net of cost" if m is None or m <= 0 else
                    f"fragile — dies at {cc['cost_tolerance_x']}× cost" if m < 1 else
                    f"robust — survives to {cc['cost_tolerance_x']}× cost")
         tol = f"{cc['cost_tolerance_x']}×" if cc["cost_tolerance_x"] is not None else "—"
-        print(f"  {sym:7} {cc['n']:>6} {cc['base_return']*100:>6.2f}% {str(m):>7} {tol:>9}  {verdict}")
-    print("\n  margin = extra cost-multiples absorbed before breakeven; ≥1.0 clears the 2× gate.")
+        print(f"  {sym:9} {prof['asset_class']:6} {cc['n']:>6} {cc['base_return']*100:>6.2f}% {str(m):>7} {tol:>9}  {verdict}")
+    print("\n  margin = extra cost-multiples absorbed before breakeven; ≥1.0 clears the 2× gate."
+          "  (crypto gated at the realistic ~30bps cost, not equity 2bps.)")
     return 0
 
 

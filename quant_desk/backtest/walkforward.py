@@ -32,7 +32,7 @@ def _slice(df: pd.DataFrame, sessions) -> pd.DataFrame:
 
 def walk_forward(df: pd.DataFrame, strategy_cls: type[Strategy], param_grid: dict, *,
                  is_sessions: int = 15, oos_sessions: int = 5, metric: str = "total_return",
-                 limits: RiskLimits | None = None, regime_filter=None) -> dict:
+                 limits: RiskLimits | None = None, regime_filter=None, broker=None) -> dict:
     limits = limits or RiskLimits()
     df = df.sort_index()
     sessions = sorted(set(df.index.tz_convert(ET).date))
@@ -50,14 +50,14 @@ def walk_forward(df: pd.DataFrame, strategy_cls: type[Strategy], param_grid: dic
         best, best_score = combos[0], float("-inf")
         for params in combos:
             r = RiskEngine(limits=limits, equity=limits.starting_equity)
-            m = run_backtest(is_df, strategy_cls(**params), r, regime_filter=regime_filter)["metrics"]
+            m = run_backtest(is_df, strategy_cls(**params), r, broker=broker, regime_filter=regime_filter)["metrics"]
             score = m.get(metric)
             if score is not None and score > best_score:
                 best_score, best = score, params
 
         # 2. evaluate best on OOS, chaining equity forward
         r = RiskEngine(limits=limits, equity=equity)
-        res = run_backtest(oos_df, strategy_cls(**best), r, regime_filter=regime_filter)
+        res = run_backtest(oos_df, strategy_cls(**best), r, broker=broker, regime_filter=regime_filter)
         equity = res["metrics"].get("end_equity", equity)
         oos_curves.append(res["equity"]); oos_trades.extend(res["trades"])
         folds.append({"is": [str(is_dates[0]), str(is_dates[-1])],

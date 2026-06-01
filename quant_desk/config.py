@@ -14,7 +14,8 @@ class RiskLimits(BaseSettings):
     max_position_pct: float = 0.20         # single position <= 20% of equity (notional)
     max_consecutive_losses: int = 3        # then cooldown for the session
     commission_per_share: float = 0.005
-    slippage_bps: float = 2.0              # 2 bps per side
+    slippage_bps: float = 2.0              # 2 bps per side (liquid equities/ETFs)
+    crypto_slippage_bps: float = 30.0     # crypto spread+fee ≈ 10–15× equities — gate it honestly
 
 
 class Settings(BaseSettings):

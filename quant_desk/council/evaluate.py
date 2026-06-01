@@ -21,10 +21,17 @@ log = get("council.evaluate")
 
 def evaluate(df: pd.DataFrame, strategy_cls: type[Strategy], param_grid: dict, *,
              regime_filter=None, limits: RiskLimits | None = None,
-             is_sessions: int = 15, oos_sessions: int = 5) -> dict:
+             is_sessions: int = 15, oos_sessions: int = 5, symbol: str | None = None) -> dict:
     limits = limits or RiskLimits()
+    # asset-class-aware costs: crypto is fills + gated at realistic (~30bps) costs, not equity 2bps
+    from ..costs import cost_profile
+    from ..execution.paper_broker import PaperBroker
+    prof = cost_profile(symbol) if symbol else {"slippage_bps": None, "commission_per_share": None,
+                                                "asset_class": "equity"}
+    broker = (PaperBroker(slippage_bps=prof["slippage_bps"], commission_per_share=prof["commission_per_share"])
+              if symbol else None)
     wf = walk_forward(df, strategy_cls, param_grid, regime_filter=regime_filter,
-                      is_sessions=is_sessions, oos_sessions=oos_sessions)
+                      is_sessions=is_sessions, oos_sessions=oos_sessions, broker=broker)
     if wf.get("error"):
         return {"error": wf["error"]}
     m = wf["oos_metrics"]
@@ -33,12 +40,12 @@ def evaluate(df: pd.DataFrame, strategy_cls: type[Strategy], param_grid: dict, *
     best = wf["folds"][-1]["best_params"] if wf.get("folds") else {}
     stress = run_stress(df, strategy_cls, params=best, regime_filter=regime_filter, limits=limits)
     decay = assess_folds(wf["folds"])
-    # cost-stress: does the OOS edge survive a doubling of the modeled trading costs?
-    # + the cost MARGIN of safety (how much cost it absorbs before breakeven) — recorded so the
-    # committee verdict is explainable: not just "survives", but "survives to N× costs".
+    # cost-stress + margin-of-safety, at the ASSET-CLASS cost (crypto edges face crypto costs).
     from .cost import cost_stress, cost_margin
-    cost = cost_stress(wf["oos_trades"], multiplier=1.0)
-    cost.update({k: cost_margin(wf["oos_trades"])[k] for k in ("margin", "cost_tolerance_x")})
+    ckw = {"slippage_bps": prof["slippage_bps"], "commission_per_share": prof["commission_per_share"]}
+    cost = cost_stress(wf["oos_trades"], multiplier=1.0, **ckw)
+    cost.update({k: cost_margin(wf["oos_trades"], **ckw)[k] for k in ("margin", "cost_tolerance_x")})
+    cost["asset_class"] = prof["asset_class"]
 
     evidence = {
         "params": best,
