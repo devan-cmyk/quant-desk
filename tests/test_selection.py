@@ -18,3 +18,6 @@ def test_select_qualifies_positive_symbols(multi_session):
     # ranking sorted by profit factor desc
     pfs = [r.get("profit_factor") or 0 for r in res["ranking"] if "error" not in r]
     assert pfs == sorted(pfs, reverse=True)
+    # validated params exposed per qualified symbol (carried from the latest WF fold)
+    assert "AAA" in res["selected_params"]
+    assert "target_r" in res["selected_params"]["AAA"]

@@ -124,13 +124,15 @@ def cmd_select(a) -> int:
                          data_fn=_data_fn(a.interval, a.days), regime_filter=rf,
                          is_sessions=a.is_sessions, oos_sessions=a.oos_sessions)
     print(f"\n=== SYMBOL SELECTION: {a.strategy.upper()}{' +regime' if rf else ''} ===")
-    print(f"  {'symbol':8} {'OOS ret':>9} {'PF':>6} {'trades':>7}  qualified")
+    print(f"  {'symbol':8} {'OOS ret':>9} {'PF':>6} {'trades':>7}  {'q':3} validated params")
     for r in res["ranking"]:
         if "error" in r:
             print(f"  {r['symbol']:8} ERROR"); continue
         pf = f"{r['profit_factor']:.2f}" if r["profit_factor"] is not None else " n/a"
-        print(f"  {r['symbol']:8} {r['oos_return']:+9.4f} {pf:>6} {r['trades']:>7}  {'✅' if r['qualified'] else '—'}")
+        print(f"  {r['symbol']:8} {r['oos_return']:+9.4f} {pf:>6} {r['trades']:>7}  "
+              f"{'✅ ' if r['qualified'] else '—  '} {r.get('best_params', {})}")
     print(f"\n  QUALIFIED UNIVERSE: {res['qualified'] or '(none cleared the bar)'}")
+    print(f"  → each forward-traded with its own validated params: {res['selected_params']}")
     return 0
 
 
@@ -138,19 +140,21 @@ def cmd_paper_run(a) -> int:
     strat_cls = REGISTRY[a.strategy]
     data_fn = _data_fn(a.interval, a.days)
     rf = RegimeFilter() if a.regime else None
+    params_by_symbol = None
     if a.select:
         sel = select_symbols([s.strip().upper() for s in a.symbols.split(",") if s.strip()],
                              strat_cls, PARAM_GRIDS.get(a.strategy, {}), data_fn=data_fn,
                              regime_filter=rf, is_sessions=a.is_sessions, oos_sessions=a.oos_sessions)
         symbols = sel["qualified"]
-        print(f"selected universe: {symbols or '(none)'}")
+        params_by_symbol = sel["selected_params"]
+        print(f"selected universe + validated params: {params_by_symbol or '(none)'}")
     else:
         symbols = [s.strip().upper() for s in a.symbols.split(",") if s.strip()]
     if not symbols:
         raise SystemExit("no symbols to trade (selection returned empty)")
     pf = PaperPortfolio.load(PAPER_STATE)
     res = run_forward(symbols, strat_cls, data_fn=data_fn, portfolio=pf, regime_filter=rf,
-                      max_bars=a.max_bars)
+                      params_by_symbol=params_by_symbol, max_bars=a.max_bars)
     pf.save(PAPER_STATE)
     print(f"\n=== PAPER RUN (forward, paper-only) — {symbols} ===")
     print(json.dumps({k: v for k, v in res.items() if k != "actions"}, indent=2, default=str))

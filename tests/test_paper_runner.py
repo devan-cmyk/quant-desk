@@ -25,6 +25,15 @@ def test_paper_run_trades_and_persists(two_sessions, tmp_path):
     assert pf2.cash == pf.cash and pf2.blotter == pf.blotter and pf2.last_ts == pf.last_ts
 
 
+def test_paper_run_uses_per_symbol_params(two_sessions):
+    pf = PaperPortfolio(start_equity=100_000, cash=100_000)
+    res = run_forward(["AAA"], OpeningRangeBreakout, data_fn=lambda s: two_sessions,
+                      portfolio=pf, limits=_limits(),
+                      params_by_symbol={"AAA": {"or_minutes": 30, "target_r": 1.0}})
+    assert res["bars_processed"] == len(two_sessions)
+    assert res["blotter_n"] >= 1                  # runs + trades with the supplied params
+
+
 def test_paper_run_is_incremental(two_sessions):
     pf = PaperPortfolio(start_equity=100_000, cash=100_000)
     run_forward(["AAA"], OpeningRangeBreakout, data_fn=lambda s: two_sessions,

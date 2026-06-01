@@ -33,10 +33,14 @@ def multi_symbol_walkforward(
         if wf.get("error"):
             per_symbol.append({"symbol": sym, "error": wf["error"]}); continue
         m = wf["oos_metrics"]
+        # the forward params = the most recent fold's IS-optimized choice (trained on the
+        # latest data, so the natural thing to carry into live/paper trading)
+        validated_params = wf["folds"][-1]["best_params"] if wf.get("folds") else {}
         per_symbol.append({
             "symbol": sym, "oos_return": round(m.get("total_return", 0.0), 4),
             "sharpe": m.get("sharpe"), "profit_factor": m.get("profit_factor"),
-            "win_rate": m.get("win_rate"), "trades": m.get("num_trades", 0)})
+            "win_rate": m.get("win_rate"), "trades": m.get("num_trades", 0),
+            "best_params": validated_params})
         pooled_pnls.extend(t["pnl"] for t in wf["oos_trades"])
 
     good = [r for r in per_symbol if "error" not in r]

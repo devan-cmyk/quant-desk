@@ -24,14 +24,15 @@ ET = "America/New_York"
 
 def run_forward(symbols: list[str], strategy_cls: type[Strategy], *,
                 data_fn: Callable[[str], pd.DataFrame], portfolio: PaperPortfolio,
-                params: dict | None = None, regime_filter=None, limits: RiskLimits | None = None,
-                broker: PaperBroker | None = None, max_bars: int | None = None,
-                max_gross: float = 1.0) -> dict:
+                params_by_symbol: dict[str, dict] | None = None, regime_filter=None,
+                limits: RiskLimits | None = None, broker: PaperBroker | None = None,
+                max_bars: int | None = None, max_gross: float = 1.0) -> dict:
     limits = limits or RiskLimits()
     broker = broker or PaperBroker()
-    params = params or {}
+    pbs = params_by_symbol or {}
     data = {s: data_fn(s).sort_index() for s in symbols}
-    strat = {s: strategy_cls(**params) for s in symbols}
+    # each symbol trades with ITS validated params (falls back to strategy defaults)
+    strat = {s: strategy_cls(**pbs.get(s, {})) for s in symbols}
     for s in symbols:
         strat[s].initialize()
 

@@ -35,5 +35,7 @@ def select_symbols(symbols: list[str], strategy_cls: type[Strategy], param_grid:
     ranking.sort(key=lambda x: (float("inf") if x.get("profit_factor") is None and "error" not in x
                                 else (x.get("profit_factor") or 0.0)), reverse=True)
     qualified = [r["symbol"] for r in ranking if r.get("qualified")]
+    # the validated params to forward-trade each qualified symbol with
+    selected_params = {r["symbol"]: r.get("best_params", {}) for r in ranking if r.get("qualified")}
     log.info("selection_done", universe=len(symbols), qualified=len(qualified))
-    return {"qualified": qualified, "ranking": ranking}
+    return {"qualified": qualified, "ranking": ranking, "selected_params": selected_params}
