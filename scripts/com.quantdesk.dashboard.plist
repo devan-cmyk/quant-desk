@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Always-on quant-desk dashboard at http://127.0.0.1:8800. RunAtLoad starts it at login,
+     KeepAlive restarts it if it exits. Read-only view of the paper account; paper-only.
+     Install:
+       cp scripts/com.quantdesk.dashboard.plist ~/Library/LaunchAgents/
+       launchctl load ~/Library/LaunchAgents/com.quantdesk.dashboard.plist -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.quantdesk.dashboard</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/devantipler/quant-desk/.venv/bin/quant-desk</string>
+    <string>dashboard</string>
+    <string>--host</string><string>127.0.0.1</string>
+    <string>--port</string><string>8800</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/devantipler/quant-desk</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>StandardOutPath</key><string>/Users/devantipler/quant-desk/dashboard.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/devantipler/quant-desk/dashboard.err.log</string>
+</dict>
+</plist>
