@@ -45,3 +45,39 @@ def cost_stress(trades: list[dict], *, multiplier: float = 1.0,
     pf = round(float(gross_w / gross_l), 3) if gross_l > 0 else None
     return {"stressed_return": round(float(total) / starting_equity, 4), "stressed_pf": pf,
             "survives": bool(total > 0), "extra_cost": round(float(extra), 2), "n": len(trades)}
+
+
+def cost_margin(trades: list[dict], *, slippage_bps: float | None = None,
+                commission_per_share: float | None = None, starting_equity: float = 100_000.0) -> dict:
+    """The cost MARGIN OF SAFETY — *how much* execution cost the edge absorbs before it dies,
+    answering 'WHY/at what point does this edge fail after costs?'. Stressed P&L is LINEAR in the
+    cost multiplier (each multiple subtracts the same total modeled cost), so the breakeven is
+    closed-form, not sampled:
+
+        margin = base_net_profit / total_modeled_round_trip_cost
+
+      margin ≥ 1  ⟺ survives the 2× cost gate (one extra cost-multiple on top of the 1× already in pnl)
+      margin ≤ 0  ⟺ already unprofitable net of the modeled cost
+      cost_tolerance_x = 1 + margin = the total cost multiple the edge tolerates before breakeven.
+    """
+    sb = settings.risk.slippage_bps if slippage_bps is None else slippage_bps
+    cps = settings.risk.commission_per_share if commission_per_share is None else commission_per_share
+    if not trades:
+        return {"margin": None, "base_return": 0.0, "total_cost": 0.0, "cost_tolerance_x": None, "n": 0}
+    base = float(sum(t["pnl"] for t in trades))
+    total_rt = float(sum(round_trip_cost(t.get("entry", 0.0), t.get("exit", t.get("entry", 0.0)),
+                                         t.get("qty", 0), sb, cps) for t in trades))
+    margin = round(base / total_rt, 3) if total_rt > 0 else None
+    return {"margin": margin, "base_return": round(base / starting_equity, 4),
+            "total_cost": round(total_rt, 2), "n": len(trades),
+            "cost_tolerance_x": round(1 + margin, 2) if margin is not None else None}
+
+
+def cost_curve(trades: list[dict], *, multipliers=(0.0, 0.5, 1.0, 1.5, 2.0, 3.0), **kw) -> dict:
+    """Stressed return/PF across a sweep of extra-cost multiples + the closed-form breakeven
+    margin. The curve visualizes the fragility; `margin` is the single institutional number."""
+    pts = []
+    for m in multipliers:
+        s = cost_stress(trades, multiplier=m, **kw)
+        pts.append({"mult": m, "return": s["stressed_return"], "pf": s["stressed_pf"], "survives": s["survives"]})
+    return {"points": pts, **cost_margin(trades, **kw)}

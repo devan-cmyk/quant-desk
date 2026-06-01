@@ -34,8 +34,11 @@ def evaluate(df: pd.DataFrame, strategy_cls: type[Strategy], param_grid: dict, *
     stress = run_stress(df, strategy_cls, params=best, regime_filter=regime_filter, limits=limits)
     decay = assess_folds(wf["folds"])
     # cost-stress: does the OOS edge survive a doubling of the modeled trading costs?
-    from .cost import cost_stress
+    # + the cost MARGIN of safety (how much cost it absorbs before breakeven) — recorded so the
+    # committee verdict is explainable: not just "survives", but "survives to N× costs".
+    from .cost import cost_stress, cost_margin
     cost = cost_stress(wf["oos_trades"], multiplier=1.0)
+    cost.update({k: cost_margin(wf["oos_trades"])[k] for k in ("margin", "cost_tolerance_x")})
 
     evidence = {
         "params": best,

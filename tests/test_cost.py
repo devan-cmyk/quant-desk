@@ -34,6 +34,40 @@ def test_empty_trades_survive_vacuously():
     assert cs["survives"] is True and cs["n"] == 0
 
 
+def test_cost_margin_closed_form():
+    from quant_desk.council.cost import cost_margin, round_trip_cost
+    tr = _trades([30, 30, 30, -10, -10, 30, 30, -10])     # base net = +120 (fat edge)
+    total_rt = sum(round_trip_cost(t["entry"], t["exit"], t["qty"], 2.0, 0.005) for t in tr)
+    m = cost_margin(tr, slippage_bps=2.0, commission_per_share=0.005)
+    # margin = base_net / total_modeled_cost (closed-form, exact)
+    assert abs(m["margin"] - round(120.0 / total_rt, 3)) < 1e-6
+    assert m["margin"] > 1.0 and m["n"] == 8                       # fat edge clears the 2× gate
+    assert m["cost_tolerance_x"] == round(1 + m["margin"], 2)
+
+
+def test_thin_edge_has_margin_below_one_and_fails_gate():
+    from quant_desk.council.cost import cost_margin, cost_stress
+    # razor-thin: base net barely positive, many trades → low margin, fails 2× gate
+    tr = _trades([0.4, -0.3, 0.4, -0.3, 0.4, -0.3] * 6)
+    m = cost_margin(tr, slippage_bps=2.0, commission_per_share=0.005)
+    assert m["margin"] is not None and m["margin"] < 1.0          # below the gate
+    assert cost_stress(tr, multiplier=1.0, slippage_bps=2.0, commission_per_share=0.005)["survives"] is False
+
+
+def test_negative_edge_has_nonpositive_margin():
+    from quant_desk.council.cost import cost_margin
+    tr = _trades([5, -25, 5, -25, 5, 5])                  # base net negative
+    assert cost_margin(tr)["margin"] <= 0                 # already dead net of cost
+
+
+def test_curve_is_monotonic_and_carries_margin():
+    from quant_desk.council.cost import cost_curve
+    cc = cost_curve(_trades([30, 30, -10, 30, -10, 30]), slippage_bps=2.0, commission_per_share=0.005)
+    rets = [p["return"] for p in cc["points"]]
+    assert rets == sorted(rets, reverse=True)             # more cost → lower return (monotonic)
+    assert "margin" in cc and cc["cost_tolerance_x"] is not None
+
+
 def test_output_is_json_serializable_native_types():
     # regression: numpy floats/bools from real backtest trades broke journaling (json.dumps)
     import json, numpy as np

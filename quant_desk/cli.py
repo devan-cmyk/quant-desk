@@ -491,6 +491,33 @@ def cmd_refresh(a) -> int:
     return 0
 
 
+def cmd_cost_curve(a) -> int:
+    """Cost margin-of-safety diagnostic: how much execution cost can each edge absorb before it
+    dies? Answers 'WHY do edges fail after costs' with a number, not a guess."""
+    from .council.cost import cost_curve
+    strat_cls = REGISTRY[a.strategy]
+    rf = RegimeFilter() if a.regime else None
+    data_fn = _data_fn(a.interval, a.days)
+    symbols = [s.strip().upper() for s in a.symbols.split(",") if s.strip()]
+    print(f"\n=== COST MARGIN OF SAFETY: {a.strategy.upper()}{' +regime' if rf else ''} "
+          f"({a.interval}, {a.days}d) — how much cost each edge absorbs before breakeven ===")
+    print(f"  {'symbol':7} {'trades':>6} {'net%':>7} {'margin':>7} {'tolerates':>9}  verdict")
+    for sym in symbols:
+        try:
+            res = run_backtest(data_fn(sym), strat_cls(), RiskEngine(), regime_filter=rf)
+        except Exception as e:
+            print(f"  {sym:7} error: {str(e)[:50]}"); continue
+        cc = cost_curve(res["trades"])
+        m = cc["margin"]
+        verdict = ("no edge net of cost" if m is None or m <= 0 else
+                   f"fragile — dies at {cc['cost_tolerance_x']}× cost" if m < 1 else
+                   f"robust — survives to {cc['cost_tolerance_x']}× cost")
+        tol = f"{cc['cost_tolerance_x']}×" if cc["cost_tolerance_x"] is not None else "—"
+        print(f"  {sym:7} {cc['n']:>6} {cc['base_return']*100:>6.2f}% {str(m):>7} {tol:>9}  {verdict}")
+    print("\n  margin = extra cost-multiples absorbed before breakeven; ≥1.0 clears the 2× gate.")
+    return 0
+
+
 def cmd_live_tick(a) -> int:
     """One REAL-TIME decision cycle on the latest bar (not a replay): manage open positions,
     evaluate new entries on the current bar, route through the chosen broker. Idempotent per bar.
@@ -712,6 +739,10 @@ def main() -> int:
     rf2.add_argument("--fit-sessions", type=int, default=20, dest="fit_sessions")
     rf2.add_argument("--holdout-sessions", type=int, default=5, dest="holdout_sessions")
     rf2.add_argument("--regime", action="store_true")
+    cc = sub.add_parser("cost-curve"); cc.set_defaults(fn=cmd_cost_curve)
+    cc.add_argument("--strategy", default="orb"); cc.add_argument("--symbols", default="SPY,QQQ,IWM")
+    cc.add_argument("--interval", default="5m"); cc.add_argument("--days", type=int, default=58)
+    cc.add_argument("--regime", action="store_true")
     lt = sub.add_parser("live-tick"); lt.set_defaults(fn=cmd_live_tick)
     lt.add_argument("--strategy", default="dmr"); lt.add_argument("--symbols", default="SPY,QQQ,IWM,XLF,XLK,XLP,TLT")
     lt.add_argument("--interval", default="1d"); lt.add_argument("--days", type=int, default=730)
