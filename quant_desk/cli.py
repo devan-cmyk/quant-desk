@@ -28,6 +28,7 @@ PARAM_GRIDS = {
     "orb": {"or_minutes": [15, 30], "target_r": [1.5, 2.0, 3.0]},
     "vwap": {"target_r": [1.0, 1.5, 2.0], "touch": [0.0005, 0.001]},
     "meanrev": {"lookback": [20, 30], "entry_z": [2.0, 2.5], "stop_k": [1.0, 1.5]},
+    "gapfade": {"min_gap": [0.002, 0.004], "stop_k": [1.0, 1.5]},
 }
 
 

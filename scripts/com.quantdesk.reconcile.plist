@@ -17,7 +17,7 @@
   <array>
     <string>/Users/devantipler/quant-desk/.venv/bin/quant-desk</string>
     <string>reconcile</string>
-    <string>--strategy</string><string>orb,meanrev,vwap</string>
+    <string>--strategy</string><string>orb,meanrev,vwap,gapfade</string>
   </array>
   <key>WorkingDirectory</key><string>/Users/devantipler/quant-desk</string>
   <key>StartCalendarInterval</key>
