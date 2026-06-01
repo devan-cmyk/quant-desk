@@ -414,6 +414,46 @@ def cmd_allocate(a) -> int:
     return 0
 
 
+def cmd_refresh(a) -> int:
+    """Walk-forward param refresh: re-fit each promoted pair's params on the most recent window,
+    adopting only refreshes that hold on a fresh holdout. Keeps deployed params current between
+    committee reviews without re-litigating the promotion (review owns the verdict)."""
+    from .monitor.registry import Registry
+    from .archive.journal import Journal
+    from .refresh.refresh import refresh_params
+    reg, jr = Registry.load(), Journal()
+    rf = RegimeFilter() if a.regime else None
+    data_fn = _data_fn(a.interval, a.days)
+    n_refreshed = 0
+    for strat in _strategies(a):
+        strat_cls = REGISTRY[strat]
+        grid = PARAM_GRIDS.get(strat, {})
+        pairs = [k.split(":", 1)[1] for k in reg.data if k.startswith(f"{strat}:")
+                 and reg.verdict(strat, k.split(":", 1)[1]) in ("promote", "paper_watch")
+                 and not reg.is_blocked(strat, k.split(":", 1)[1]) and reg.params(strat, k.split(":", 1)[1])]
+        if not pairs:
+            continue
+        print(f"\n=== PARAM REFRESH: {strat.upper()}{' +regime' if rf else ''} ===")
+        for sym in pairs:
+            cur = reg.params(strat, sym)
+            try:
+                res = refresh_params(data_fn(sym), strat_cls, grid, cur, regime_filter=rf,
+                                     fit_sessions=a.fit_sessions, holdout_sessions=a.holdout_sessions)
+            except Exception as e:
+                print(f"  {sym:6} error: {str(e)[:50]}"); continue
+            if res["adopt"]:
+                reg.set_params(strat, sym, res["new"]); n_refreshed += 1
+                jr.record("param_refresh", strategy=strat, symbols=[sym],
+                          summary=f"{sym}: {cur} → {res['new']} (holdout {res['cur_oos']}→{res['new_oos']})",
+                          decision="adopted refreshed params", payload=res)
+                print(f"  {sym:6} ↻ {cur} → {res['new']}  holdout {res['cur_oos']:+.4f}→{res['new_oos']:+.4f} (n={res['new_trades']})")
+            else:
+                print(f"  {sym:6} · kept {cur}  ({res['reason']})")
+    reg.save(); jr.close()
+    print(f"\n  {n_refreshed} pair(s) refreshed; the runner sizes against the updated params.")
+    return 0
+
+
 def cmd_alerts(a) -> int:
     """Gate alerting: notify when a pair flips TRADING↔BLOCKED or is newly approved. Diffs the
     current gate against the last-alerted snapshot; appends to the feed + raises notifications."""
@@ -531,6 +571,12 @@ def main() -> int:
     al.add_argument("--strategy", default="orb,meanrev,vwap")
     al.add_argument("--interval", default="5m"); al.add_argument("--days", type=int, default=58)
     al.add_argument("--regime", action="store_true")
+    rf2 = sub.add_parser("refresh"); rf2.set_defaults(fn=cmd_refresh)
+    rf2.add_argument("--strategy", default="orb,meanrev,vwap")
+    rf2.add_argument("--interval", default="5m"); rf2.add_argument("--days", type=int, default=58)
+    rf2.add_argument("--fit-sessions", type=int, default=20, dest="fit_sessions")
+    rf2.add_argument("--holdout-sessions", type=int, default=5, dest="holdout_sessions")
+    rf2.add_argument("--regime", action="store_true")
     al2 = sub.add_parser("alerts"); al2.set_defaults(fn=cmd_alerts)
     al2.add_argument("--list", action="store_true", help="show the recent alert feed")
     al2.add_argument("--test", action="store_true", help="fire a test alert through the channels")

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Mid-week walk-forward param refresh. Wednesdays 12:00 local: for each currently-promoted,
+     non-blocked pair, re-fit its params on the MOST RECENT window and adopt the refresh only if
+     it holds on a fresh holdout AND is no worse than the params in use. Keeps deployed params
+     current between the Saturday committee reviews, guarded against overfitting (a refit that
+     fails out-of-sample is discarded — the pair keeps its existing params). Never changes a
+     verdict; review owns promotion. Updates ~/.quant-desk/registry.json + journals each change.
+     Read-only research; paper-only system.
+     Install:
+       cp scripts/com.quantdesk.refresh.plist ~/Library/LaunchAgents/
+       launchctl load ~/Library/LaunchAgents/com.quantdesk.refresh.plist -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.quantdesk.refresh</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/devantipler/quant-desk/.venv/bin/quant-desk</string>
+    <string>refresh</string>
+    <string>--strategy</string><string>orb,meanrev,vwap</string>
+    <string>--regime</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/devantipler/quant-desk</string>
+  <key>StartCalendarInterval</key>
+  <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>/Users/devantipler/quant-desk/refresh.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/devantipler/quant-desk/refresh.err.log</string>
+</dict>
+</plist>
