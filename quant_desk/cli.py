@@ -209,18 +209,13 @@ def cmd_paper_run(a) -> int:
         strat_cls = REGISTRY[strat]
         params_by_symbol = None
         if a.select:
-            sel = select_symbols(base_syms, strat_cls, PARAM_GRIDS.get(strat, {}), data_fn=data_fn,
-                                 regime_filter=rf, is_sessions=a.is_sessions, oos_sessions=a.oos_sessions)
-            symbols = sel["qualified"]
-            params_by_symbol = sel["selected_params"]
-            # honor the promotion gate per strategy: skip any pair the committee rejected/retired,
-            # the decay monitor retired, or forward reconciliation flagged (is_blocked covers all)
-            blocked = [s for s in symbols if reg.is_blocked(strat, s)]
-            if blocked:
-                symbols = [s for s in symbols if s not in blocked]
-                params_by_symbol = {s: p for s, p in params_by_symbol.items() if s not in blocked}
-                print(f"[{strat}] excluded (gate-blocked): {blocked}")
-            print(f"[{strat}] selected + validated params: {params_by_symbol or '(none)'}")
+            # the committee gate is the source of truth: trade exactly the approved, non-blocked
+            # pairs, sized with the validated params the committee stored at review time — no
+            # redundant selection walk-forward at trade time. (Run `review` first to populate it.)
+            symbols = [s for s in base_syms
+                       if reg.verdict(strat, s) in ("promote", "paper_watch") and not reg.is_blocked(strat, s)]
+            params_by_symbol = {s: reg.params(strat, s) for s in symbols}
+            print(f"[{strat}] committee-approved (registry params): {params_by_symbol or '(none)'}")
         else:
             symbols = base_syms
         if symbols:
