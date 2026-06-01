@@ -44,6 +44,23 @@ uv venv --python 3.12 && uv pip install -e ".[dev]"
 total return, CAGR, Sharpe, Sortino, Calmar, max drawdown, win rate, expectancy, profit
 factor. (Ulcer/VaR/CVaR/recovery-factor bolt onto `backtest/metrics.py` the same way.)
 
+## Autonomous operation (scheduled launchd agents)
+The desk runs itself on a weekly research → daily paper-trade cadence. The **decision
+committee** is the promotion gate: nothing reaches the paper account it hasn't cleared, and
+approval is revoked the moment an edge decays. Install each with
+`cp scripts/<agent>.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/<agent>.plist`.
+
+| Agent | When | Does |
+|---|---|---|
+| `com.quantdesk.review`    | Sat 09:00 | Convenes the committee over the universe (walk-forward + Monte-Carlo + stress lab + decay), writes each **promote/paper_watch/reject/retire** verdict to the registry + append-only journal. |
+| `com.quantdesk.monitor`   | Sat 10:00 | Re-assesses rolling out-of-sample health, **auto-retires** decayed symbols in the registry. |
+| `com.quantdesk.paperrun`  | Weekdays 17:00 | `paper-run --select` — paper-trades only committee-approved pairs (`is_blocked` excludes anything rejected/retired). |
+| `com.quantdesk.dashboard` | always-on (:8800) | FastAPI account + research-journal dashboard. |
+
+The gate (`monitor/registry.py: is_blocked`) blocks a pair if the committee said
+`reject`/`retire` **or** the decay monitor retired it. Run the gate by hand anytime:
+`quant-desk review --strategy orb --symbols SPY,QQQ,IWM,AAPL,NVDA,MSFT --regime`.
+
 ## Roadmap (what bolts onto this spine, in order)
 1. More providers (Alpaca paper, Polygon) behind `DataProvider`; Redis hot cache.
 2. More strategies (VWAP pullback, ORB short, mean-reversion, RVOL momentum) via `REGISTRY`.

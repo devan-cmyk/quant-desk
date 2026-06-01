@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Weekly committee review. Saturdays 09:00 local (one hour BEFORE the decay monitor):
+     convene the decision committee over the whole universe, run the full validation battery
+     (walk-forward + Monte-Carlo + stress lab + decay), and write each promote/paper_watch/
+     reject/retire verdict to ~/.quant-desk/registry.json and the append-only journal. The
+     daily paper runner (paper-run --select) only trades committee-approved pairs; is_blocked
+     excludes anything rejected/retired. This is the promotion gate — nothing reaches the paper
+     account that the committee hasn't cleared. Read-only research; paper-only system.
+     Install:
+       cp scripts/com.quantdesk.review.plist ~/Library/LaunchAgents/
+       launchctl load ~/Library/LaunchAgents/com.quantdesk.review.plist -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.quantdesk.review</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/devantipler/quant-desk/.venv/bin/quant-desk</string>
+    <string>review</string>
+    <string>--strategy</string><string>orb</string>
+    <string>--symbols</string><string>SPY,QQQ,IWM,AAPL,NVDA,MSFT</string>
+    <string>--regime</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/devantipler/quant-desk</string>
+  <key>StartCalendarInterval</key>
+  <dict><key>Weekday</key><integer>6</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>/Users/devantipler/quant-desk/review.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/devantipler/quant-desk/review.err.log</string>
+</dict>
+</plist>
