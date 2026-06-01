@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Daily system self-diagnostic. Every day 08:00 (pre-market): validate the platform's real
+     operational invariants — agents loaded & not erroring, committee gate fresh (review ran on
+     cadence), persisted state intact (registry/journal/paper account loadable), data cache
+     present. On a degraded/critical result, --alert pages it into the alert feed + a macOS
+     notification, turning silent autonomous-loop failures into observable signals. Read-only.
+     Install: cp scripts/com.quantdesk.health.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.quantdesk.health.plist -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.quantdesk.health</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/devantipler/quant-desk/.venv/bin/quant-desk</string>
+    <string>health</string>
+    <string>--alert</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/devantipler/quant-desk</string>
+  <key>StartCalendarInterval</key>
+  <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>/Users/devantipler/quant-desk/health.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/devantipler/quant-desk/health.err.log</string>
+</dict>
+</plist>

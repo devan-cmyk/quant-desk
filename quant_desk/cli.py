@@ -491,6 +491,31 @@ def cmd_refresh(a) -> int:
     return 0
 
 
+def cmd_health(a) -> int:
+    """System self-diagnostics: are the agents alive, the gate fresh, state intact? Continuous
+    validation of the platform's real operational invariants; --alert pages on a degraded state."""
+    from .health import system_health
+    h = system_health()
+    icon = {"critical": "🔴", "degraded": "🟡", "healthy": "🟢"}
+    sev = {"critical": "🔴", "high": "🟠", "warn": "🟡", "info": "·"}
+    print(f"\n=== SYSTEM HEALTH: {icon.get(h['status'])} {h['status'].upper()} ({h['score']}/100) ===")
+    for c in h["checks"]:
+        mark = "✓" if c["ok"] else sev.get(c["severity"], "✗")
+        print(f"  {mark} {c['name']:16} {c['detail']}")
+    if a.alert and h["status"] != "healthy":
+        from .alerts.gate_alerts import AlertFeed, _notify_macos, _notify_webhook
+        import datetime as _dt
+        ev = [{"ts": _dt.datetime.now(_dt.timezone.utc).isoformat(), "pair": "SYSTEM",
+               "kind": "health", "severity": "high",
+               "message": f"system {h['status']} ({h['score']}/100): "
+                          + "; ".join(f"{c['name']}: {c['detail']}" for c in h["issues"])}]
+        f = AlertFeed(); f.append(ev); f.save()
+        if not a.quiet:
+            _notify_macos(ev); _notify_webhook(ev)
+        print(f"\n  ⚠ alerted: system is {h['status']}")
+    return 0 if h["status"] != "critical" else 1
+
+
 def cmd_alerts(a) -> int:
     """Gate alerting: notify when a pair flips TRADING↔BLOCKED or is newly approved. Diffs the
     current gate against the last-alerted snapshot; appends to the feed + raises notifications."""
@@ -615,6 +640,9 @@ def main() -> int:
     rf2.add_argument("--fit-sessions", type=int, default=20, dest="fit_sessions")
     rf2.add_argument("--holdout-sessions", type=int, default=5, dest="holdout_sessions")
     rf2.add_argument("--regime", action="store_true")
+    he = sub.add_parser("health"); he.set_defaults(fn=cmd_health)
+    he.add_argument("--alert", action="store_true", help="page (feed + notify) if not healthy")
+    he.add_argument("--quiet", action="store_true", help="with --alert: record but don't notify")
     al2 = sub.add_parser("alerts"); al2.set_defaults(fn=cmd_alerts)
     al2.add_argument("--list", action="store_true", help="show the recent alert feed")
     al2.add_argument("--test", action="store_true", help="fire a test alert through the channels")

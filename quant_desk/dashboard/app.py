@@ -98,6 +98,13 @@ def allocation() -> dict:
             "current_regime": p.get("current_regime"), "tilts": p.get("tilts", {})}
 
 
+@app.get("/api/health")
+def health() -> dict:
+    """System self-diagnostics — agents alive, gate fresh, state intact."""
+    from ..health import system_health
+    return system_health()
+
+
 @app.get("/api/alerts")
 def alerts(n: int = 20) -> dict:
     from ..alerts.gate_alerts import AlertFeed
