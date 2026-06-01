@@ -16,11 +16,15 @@ MIN_PROFIT_FACTOR = 1.3
 
 
 def _risk_officer(ev: dict) -> dict:
-    st, mc = ev.get("stress", {}), ev.get("montecarlo", {})
+    st, mc, cost = ev.get("stress", {}), ev.get("montecarlo", {}), ev.get("cost", {})
     reasons, vote, conf = [], "promote", 0.7
     if not st.get("survived_all", True):
         vote, conf = "reject", 0.95
         reasons.append(f"fails a synthetic crisis (worst DD {st.get('worst_drawdown')})")
+    if not cost.get("survives", True):
+        vote, conf = "reject", 0.9
+        reasons.append(f"edge dies under 2× costs (stressed PF {cost.get('stressed_pf')}, "
+                       f"ret {cost.get('stressed_return')})")
     ruin = mc.get("prob_ruin")
     if ruin is not None and ruin > MAX_RUIN:
         vote, conf = "reject", 0.95
@@ -77,10 +81,14 @@ def _contrarian(ev: dict) -> dict:
 def decide(evidence: dict) -> dict:
     votes = [_risk_officer(evidence), _quant(evidence), _contrarian(evidence)]
     st, mc, decay = evidence.get("stress", {}), evidence.get("montecarlo", {}), evidence.get("decay", {})
+    cost = evidence.get("cost", {})
 
     # ── HARD GATES (cannot be voted away) ────────────────────────────────────
     if not st.get("survived_all", True) or (mc.get("prob_ruin") or 0) > MAX_RUIN:
         decision, why = "reject", "HARD RISK GATE: fails a crisis or ruin risk too high"
+    elif not cost.get("survives", True):
+        decision, why = "reject", ("HARD COST GATE: edge does not survive 2× modeled costs "
+                                   f"(stressed PF {cost.get('stressed_pf')}, ret {cost.get('stressed_return')})")
     elif decay.get("status") == "retired":
         decision, why = "retire", "edge decayed (recent OOS negative)"
     else:

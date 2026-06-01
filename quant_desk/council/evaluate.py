@@ -33,6 +33,9 @@ def evaluate(df: pd.DataFrame, strategy_cls: type[Strategy], param_grid: dict, *
     best = wf["folds"][-1]["best_params"] if wf.get("folds") else {}
     stress = run_stress(df, strategy_cls, params=best, regime_filter=regime_filter, limits=limits)
     decay = assess_folds(wf["folds"])
+    # cost-stress: does the OOS edge survive a doubling of the modeled trading costs?
+    from .cost import cost_stress
+    cost = cost_stress(wf["oos_trades"], multiplier=1.0)
 
     evidence = {
         "params": best,
@@ -43,6 +46,7 @@ def evaluate(df: pd.DataFrame, strategy_cls: type[Strategy], param_grid: dict, *
                        "return_p50": mc.get("return_p50"), "maxdd_p95_worst": mc.get("maxdd_p95_worst"),
                        "n_trades": mc.get("n_trades")},
         "stress": {"survived_all": stress["survived_all"], "worst_drawdown": stress["worst_drawdown"]},
+        "cost": cost,
         "decay": decay,
     }
     verdict = committee.decide(evidence)
