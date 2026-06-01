@@ -68,10 +68,11 @@ def walk_forward(df: pd.DataFrame, strategy_cls: type[Strategy], param_grid: dic
         i += oos_sessions
 
     if not oos_curves:
-        return {"error": "not enough sessions for one fold", "folds": []}
+        return {"error": "not enough sessions for one fold", "folds": [], "oos_trades": []}
     oos_equity = pd.concat(oos_curves)
     oos_equity = oos_equity[~oos_equity.index.duplicated(keep="last")].sort_index()
     agg = compute_metrics(oos_equity, oos_trades)
     log.info("walkforward_done", folds=len(folds), oos_trades=len(oos_trades),
              oos_return=agg.get("total_return"))
-    return {"folds": folds, "oos_equity": oos_equity, "oos_metrics": agg, "n_folds": len(folds)}
+    return {"folds": folds, "oos_equity": oos_equity, "oos_metrics": agg,
+            "oos_trades": oos_trades, "n_folds": len(folds)}

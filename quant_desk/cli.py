@@ -9,6 +9,7 @@ import json
 
 from .backtest.engine import run_backtest
 from .backtest.walkforward import walk_forward
+from .backtest.multisymbol import multi_symbol_walkforward
 from .config import settings
 from .data.yfinance_provider import YFinanceProvider
 from .logging import configure, get
@@ -75,6 +76,34 @@ def cmd_walkforward(a) -> int:
     return 0
 
 
+def cmd_multisymbol(a) -> int:
+    strat_cls = REGISTRY.get(a.strategy)
+    if not strat_cls:
+        raise SystemExit(f"unknown strategy '{a.strategy}'. available: {list(REGISTRY)}")
+    symbols = [s.strip().upper() for s in a.symbols.split(",") if s.strip()]
+    prov = YFinanceProvider()
+    data_fn = lambda sym: prov.bars(sym, interval=a.interval, lookback_days=a.days)
+    rf = RegimeFilter() if a.regime else None
+    res = multi_symbol_walkforward(symbols, strat_cls, PARAM_GRIDS.get(a.strategy, {}),
+                                   data_fn=data_fn, regime_filter=rf,
+                                   is_sessions=a.is_sessions, oos_sessions=a.oos_sessions)
+    print(f"\n=== MULTI-SYMBOL WALK-FORWARD: {a.strategy.upper()}{' +regime' if rf else ''} "
+          f"({len(symbols)} symbols, {a.interval}) ===")
+    print(f"  {'symbol':8} {'OOS ret':>9} {'Sharpe':>8} {'PF':>6} {'win':>5} {'trades':>7}")
+    for r in res["per_symbol"]:
+        if "error" in r:
+            print(f"  {r['symbol']:8} {'ERROR: ' + r['error'][:40]}"); continue
+        sh = f"{r['sharpe']:+.2f}" if r["sharpe"] is not None else "  n/a"
+        pf = f"{r['profit_factor']:.2f}" if r["profit_factor"] is not None else " n/a"
+        print(f"  {r['symbol']:8} {r['oos_return']:+9.4f} {sh:>8} {pf:>6} {r['win_rate']:>5.2f} {r['trades']:>7}")
+    s = res["summary"]
+    print(f"\n  edge breadth: {s['symbols_positive_oos']}/{s['symbols_run']} symbols positive OOS · "
+          f"{s['pooled_oos_trades']} pooled trades")
+    print("\n--- POOLED Monte-Carlo (bootstrap, the robustness verdict) ---")
+    print(json.dumps(res["pooled_monte_carlo"], indent=2, default=str))
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="quant-desk")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -94,6 +123,14 @@ def main() -> int:
     w.add_argument("--oos-sessions", type=int, default=5, dest="oos_sessions")
     w.add_argument("--metric", default="total_return")
     w.add_argument("--regime", action="store_true", help="gate signals with the trend/chop filter")
+    ms = sub.add_parser("multisymbol"); ms.set_defaults(fn=cmd_multisymbol)
+    ms.add_argument("--symbols", default="SPY,QQQ,IWM,AAPL,NVDA,MSFT")
+    ms.add_argument("--strategy", default="orb")
+    ms.add_argument("--interval", default="5m")
+    ms.add_argument("--days", type=int, default=58)
+    ms.add_argument("--is-sessions", type=int, default=15, dest="is_sessions")
+    ms.add_argument("--oos-sessions", type=int, default=5, dest="oos_sessions")
+    ms.add_argument("--regime", action="store_true", help="gate signals with the trend/chop filter")
     a = ap.parse_args()
     configure(settings.log_level)
     return a.fn(a)
