@@ -364,7 +364,7 @@ def cmd_allocate(a) -> int:
     edges are and set a diversification-aware per-pair risk weight the runner sizes against."""
     from .monitor.registry import Registry
     from .archive.journal import Journal
-    from .portfolio.allocate import session_returns, allocate
+    from .portfolio.allocate import session_returns, allocate, regime_session_labels
     reg, jr = Registry.load(), Journal()
     data_fn = _data_fn(a.interval, a.days)
     rf = RegimeFilter() if a.regime else None
@@ -389,7 +389,16 @@ def cmd_allocate(a) -> int:
     if not returns_by_pair:
         print("\n  no committee-approved pairs to allocate across — run review/reconcile first.")
         return 0
-    alloc = allocate(returns_by_pair)
+    # regime-conditional tilt: classify each session (and the current one) off a benchmark
+    regime_labels = current_regime = None
+    if rf:
+        try:
+            bench = data_fn(a.benchmark).sort_index()
+            regime_labels = regime_session_labels(bench, rf)
+            current_regime = regime_labels[max(regime_labels)]
+        except Exception as e:
+            print(f"  (regime benchmark {a.benchmark} unavailable: {str(e)[:40]} — unconditional)")
+    alloc = allocate(returns_by_pair, regime_labels=regime_labels, current_regime=current_regime)
     for pair, w in alloc["weights"].items():
         strat, _, sym = pair.partition(":")
         reg.set_allocation(strat, sym, w, alloc["scales"][pair])
@@ -397,15 +406,20 @@ def cmd_allocate(a) -> int:
     jr.record("allocation", strategy=",".join(_strategies(a)), symbols=list(returns_by_pair),
               summary=f"{len(returns_by_pair)} pairs · {alloc['method']} · {alloc['n_obs']} sessions",
               decision=alloc["method"], payload={"weights": alloc["weights"], "scales": alloc["scales"],
-              "corr": alloc["corr"], "n_obs": alloc["n_obs"]})
+              "corr": alloc["corr"], "n_obs": alloc["n_obs"],
+              "current_regime": alloc.get("current_regime"), "tilts": alloc.get("tilts", {})})
     jr.close()
-    print(f"\n=== PORTFOLIO ALLOCATION ({alloc['method']}, {alloc['n_obs']} shared sessions) ===")
-    print(f"  {'pair':18} {'weight':>8} {'risk×':>7}  avg|corr|")
+    rtag = f" · regime: {alloc.get('current_regime').upper()}" if alloc.get("current_regime") else ""
+    print(f"\n=== PORTFOLIO ALLOCATION ({alloc['method']}, {alloc['n_obs']} sessions{rtag}) ===")
+    tilted = any(t != 1.0 for t in alloc.get("tilts", {}).values())
+    print(f"  {'pair':18} {'weight':>8} {'risk×':>7} {'tilt':>6}  avg|corr|" if tilted
+          else f"  {'pair':18} {'weight':>8} {'risk×':>7}  avg|corr|")
     pairs = list(alloc["weights"])
     corr = alloc["corr"]
     for p in pairs:
         others = [abs(corr[p][q]) for q in pairs if q != p] or [0.0]
-        print(f"  {p:18} {alloc['weights'][p]*100:7.1f}% {alloc['scales'][p]:>6.2f}x   {sum(others)/len(others):.2f}")
+        tcol = f" {alloc['tilts'].get(p, 1.0):>5.2f}" if tilted else ""
+        print(f"  {p:18} {alloc['weights'][p]*100:7.1f}% {alloc['scales'][p]:>6.2f}x{tcol}   {sum(others)/len(others):.2f}")
     if len(pairs) > 1:
         print("\n  correlation matrix:")
         print("  " + " " * 18 + " ".join(f"{p.split(':')[1][:6]:>7}" for p in pairs))
@@ -569,9 +583,10 @@ def main() -> int:
     rc.add_argument("--min-trades", type=int, default=8, dest="min_trades")
     rc.add_argument("--drift-fraction", type=float, default=0.6, dest="drift_fraction")
     al = sub.add_parser("allocate"); al.set_defaults(fn=cmd_allocate)
-    al.add_argument("--strategy", default="orb,meanrev,vwap")
+    al.add_argument("--strategy", default="orb,meanrev,vwap,gapfade")
     al.add_argument("--interval", default="5m"); al.add_argument("--days", type=int, default=58)
     al.add_argument("--regime", action="store_true")
+    al.add_argument("--benchmark", default="SPY", help="symbol used to classify the market regime")
     rf2 = sub.add_parser("refresh"); rf2.set_defaults(fn=cmd_refresh)
     rf2.add_argument("--strategy", default="orb,meanrev,vwap")
     rf2.add_argument("--interval", default="5m"); rf2.add_argument("--days", type=int, default=58)

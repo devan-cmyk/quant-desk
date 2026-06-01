@@ -91,7 +91,8 @@ def allocation() -> dict:
     p = r.get("payload") or {}
     return {"present": True, "ts": r["ts"], "method": r.get("decision"),
             "n_obs": p.get("n_obs"), "weights": p.get("weights", {}),
-            "scales": p.get("scales", {}), "corr": p.get("corr", {})}
+            "scales": p.get("scales", {}), "corr": p.get("corr", {}),
+            "current_regime": p.get("current_regime"), "tilts": p.get("tilts", {})}
 
 
 @app.get("/api/alerts")

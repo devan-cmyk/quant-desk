@@ -199,12 +199,14 @@ async function loadAllocation(){
     const corr = a.corr||{}; const pairs = Object.keys(corr);
     document.getElementById("corrsec").style.display = (a.present && pairs.length>1) ? "" : "none";
     if(!a.present || pairs.length<2) return;
-    document.getElementById("corrsum").textContent =
-      `· ${a.method||""} · ${a.n_obs||0} sessions`;
+    const tilts = a.tilts||{}; const tilted = Object.values(tilts).some(t=>t!==1);
+    const reg = a.current_regime ? `<span class="pill ${a.current_regime==='trend'?'go':'warn'}">${a.current_regime.toUpperCase()}</span>` : "";
+    document.getElementById("corrsum").innerHTML =
+      `· ${a.method||""} · ${a.n_obs||0} sessions ${reg}`;
     const short = p => p.length>12 ? p.slice(0,12) : p;
     let h = `<table style="font-size:12px"><thead><tr><th></th>`
       + pairs.map(p=>`<th class="right" title="${p}">${short(p)}</th>`).join("")
-      + `<th class="right">wt</th><th class="right">risk×</th></tr></thead><tbody>`;
+      + `<th class="right">wt</th>` + (tilted?`<th class="right">tilt</th>`:"") + `<th class="right">risk×</th></tr></thead><tbody>`;
     for(const r of pairs){
       h += `<tr><td title="${r}"><b>${short(r)}</b></td>`;
       for(const c of pairs){
@@ -212,8 +214,9 @@ async function loadAllocation(){
         const diag = r===c;
         h += `<td class="right" style="background:${diag?'#1f2733':corrColor(v)};color:${Math.abs(v)>0.5&&!diag?'#fff':'var(--txt)'}">${v==null?'—':v.toFixed(2)}</td>`;
       }
-      const w=(a.weights||{})[r], s=(a.scales||{})[r];
+      const w=(a.weights||{})[r], s=(a.scales||{})[r], t=tilts[r];
       h += `<td class="right">${w==null?'—':(w*100).toFixed(0)+'%'}</td>`
+         + (tilted?`<td class="right ${t>1?'pos':t<1?'neg':''}">${t==null?'—':t.toFixed(2)}</td>`:"")
          + `<td class="right ${s>1?'pos':s<1?'neg':''}">${s==null?'—':s+'×'}</td></tr>`;
     }
     document.getElementById("corr").innerHTML = h + `</tbody></table>`;
