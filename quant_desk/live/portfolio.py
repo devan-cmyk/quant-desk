@@ -74,9 +74,8 @@ class PaperPortfolio:
 
     # ── persistence ──────────────────────────────────────────────────────────
     def save(self, path: str):
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w") as f:
-            json.dump(asdict(self), f, indent=2)
+        from ..storage import atomic_write_json
+        atomic_write_json(path, asdict(self))
 
     @classmethod
     def load(cls, path: str, start_equity: float = 100_000.0) -> "PaperPortfolio":

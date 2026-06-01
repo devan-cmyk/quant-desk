@@ -24,9 +24,8 @@ class Registry:
             return cls(json.load(f), p)
 
     def save(self) -> None:
-        os.makedirs(os.path.dirname(self.path), exist_ok=True)
-        with open(self.path, "w") as f:
-            json.dump(self.data, f, indent=2)
+        from ..storage import atomic_write_json
+        atomic_write_json(self.path, self.data)
 
     def update(self, strategy: str, assessments: list[dict]) -> list[dict]:
         """Record the latest assessments; return the status-change events since last run."""

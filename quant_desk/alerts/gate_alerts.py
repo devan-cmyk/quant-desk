@@ -77,9 +77,8 @@ class AlertFeed:
         self.items = (self.items + events)[-FEED_MAX:]
 
     def save(self) -> None:
-        os.makedirs(os.path.dirname(self.path), exist_ok=True)
-        with open(self.path, "w") as f:
-            json.dump(self.items, f, indent=2)
+        from ..storage import atomic_write_json
+        atomic_write_json(self.path, self.items)
 
     def recent(self, n: int = 30) -> list[dict]:
         return list(reversed(self.items))[:n]
@@ -137,7 +136,6 @@ def run_alerts(reg, *, snapshot_path: str | None = None, notify: bool = True) ->
         if notify:
             _notify_macos(events)
             _notify_webhook(events)
-    os.makedirs(os.path.dirname(snap_path), exist_ok=True)
-    with open(snap_path, "w") as f:
-        json.dump(curr, f, indent=2)
+    from ..storage import atomic_write_json
+    atomic_write_json(snap_path, curr)
     return events
