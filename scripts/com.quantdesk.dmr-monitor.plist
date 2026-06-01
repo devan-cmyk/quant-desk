@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- dmr edge-decay monitor. Saturdays 13:00 (after dmr-reconcile). Re-assesses each dmr pair's
+     rolling out-of-sample health on daily bars and auto-retires decayed pairs in the registry.
+     Same daily params as dmr-review. No --regime (contrarian). Read-only research; paper-only.
+     Install: cp scripts/com.quantdesk.dmr-monitor.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.quantdesk.dmr-monitor.plist -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.quantdesk.dmr-monitor</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/devantipler/quant-desk/.venv/bin/quant-desk</string>
+    <string>monitor</string>
+    <string>--strategy</string><string>dmr</string>
+    <string>--symbols</string><string>SPY,QQQ,IWM</string>
+    <string>--interval</string><string>1d</string>
+    <string>--days</string><string>730</string>
+    <string>--is-sessions</string><string>120</string>
+    <string>--oos-sessions</string><string>60</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/devantipler/quant-desk</string>
+  <key>StartCalendarInterval</key>
+  <dict><key>Weekday</key><integer>6</integer><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>/Users/devantipler/quant-desk/dmr-monitor.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/devantipler/quant-desk/dmr-monitor.err.log</string>
+</dict>
+</plist>

@@ -63,6 +63,20 @@ account it hasn't cleared, and approval is revoked the moment an edge decays. In
 | `com.quantdesk.paperrun`  | Weekdays 17:00 | `paper-run --select` — paper-trades only committee-approved pairs (`is_blocked` excludes anything rejected/retired). |
 | `com.quantdesk.dashboard` | always-on (:8800) | FastAPI dashboard: account, per-strategy P&L, equity curve, **strategy gate** (kill-paths + allocation), **correlation heatmap**, gate alerts, research journal. |
 
+**Daily swing loop (`dmr` — daily mean-reversion).** A parallel agent set runs the same loop on
+**1-day bars** (730d history, larger walk-forward folds), offset in time so it never races the
+5-minute agents on the shared registry/account. Index ETFs only (survivorship-safe), and **no
+regime filter** (mean-reversion is contrarian — the trend gate would veto its entries). This is
+the project's first cost-robust edge: SPY/IWM survive the 2× cost gate out-of-sample.
+
+| Agent | When | Does |
+|---|---|---|
+| `com.quantdesk.dmr-review`    | Sat 12:00 | committee review of `dmr` on daily bars → verdicts + params |
+| `com.quantdesk.dmr-reconcile` | Sat 12:30 | forward drift / probation graduation for dmr pairs |
+| `com.quantdesk.dmr-monitor`   | Sat 13:00 | daily edge-decay monitor |
+| `com.quantdesk.dmr-allocate`  | Sat 13:30 | correlation-weighted risk across dmr pairs (unconditional) |
+| `com.quantdesk.dmr-paperrun`  | Weekdays 17:30 | swing paper-run — multi-day holds that persist across runs |
+
 The gate (`monitor/registry.py: is_blocked`) blocks a pair if the committee said
 `reject`/`retire`, the decay monitor retired it, **or** forward reconciliation flagged
 `drift`. Three independent kill-paths, one gate. Run them by hand anytime:

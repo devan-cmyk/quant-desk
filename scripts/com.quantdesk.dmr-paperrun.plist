@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- dmr forward paper runner. Weekdays 17:30 — AFTER the 5-minute paperrun (17:00) so the two
+     never race the shared paper_state.json. Paper-trades the committee-approved dmr pairs on
+     daily bars (swing: positions persist across runs, exit on stop/target/max_hold). Probation
+     sizing applies until forward-confirmed. No --regime (contrarian). Paper-only; live execution
+     stays behind the triple-lock.
+     Install: cp scripts/com.quantdesk.dmr-paperrun.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.quantdesk.dmr-paperrun.plist -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.quantdesk.dmr-paperrun</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/devantipler/quant-desk/.venv/bin/quant-desk</string>
+    <string>paper-run</string>
+    <string>--strategy</string><string>dmr</string>
+    <string>--symbols</string><string>SPY,QQQ,IWM</string>
+    <string>--interval</string><string>1d</string>
+    <string>--days</string><string>730</string>
+    <string>--select</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/devantipler/quant-desk</string>
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>30</integer></dict>
+  </array>
+  <key>StandardOutPath</key><string>/Users/devantipler/quant-desk/dmr-paperrun.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/devantipler/quant-desk/dmr-paperrun.err.log</string>
+</dict>
+</plist>

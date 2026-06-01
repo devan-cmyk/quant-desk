@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- dmr forward reconciliation. Saturdays 12:30 (after dmr-review). Compares each dmr pair's
+     realized forward paper edge against the profit factor it was promoted on; flags drift
+     (blocks) and graduates pairs from probation to full size once enough forward trades confirm.
+     Reads the shared paper account's dmr-tagged trades. Read-only research; paper-only.
+     Install: cp scripts/com.quantdesk.dmr-reconcile.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.quantdesk.dmr-reconcile.plist -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.quantdesk.dmr-reconcile</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/devantipler/quant-desk/.venv/bin/quant-desk</string>
+    <string>reconcile</string>
+    <string>--strategy</string><string>dmr</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/devantipler/quant-desk</string>
+  <key>StartCalendarInterval</key>
+  <dict><key>Weekday</key><integer>6</integer><key>Hour</key><integer>12</integer><key>Minute</key><integer>30</integer></dict>
+  <key>StandardOutPath</key><string>/Users/devantipler/quant-desk/dmr-reconcile.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/devantipler/quant-desk/dmr-reconcile.err.log</string>
+</dict>
+</plist>

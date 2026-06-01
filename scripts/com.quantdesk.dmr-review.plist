@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Daily mean-reversion (dmr) committee review. Saturdays 12:00 — AFTER the 5-minute loop
+     (09:00–11:00) so the two never race the shared registry. Daily params: 1d bars, 730d
+     history, large walk-forward folds (120 IS / 60 OOS). NO --regime: dmr is contrarian
+     (fades extremes), and the trend filter would veto most of its entries. Index ETFs only
+     (single names are survivorship-biased for dip-buying). Writes verdicts + validated params
+     the dmr paper runner honors. Read-only research; paper-only.
+     Install: cp scripts/com.quantdesk.dmr-review.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.quantdesk.dmr-review.plist -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.quantdesk.dmr-review</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/devantipler/quant-desk/.venv/bin/quant-desk</string>
+    <string>review</string>
+    <string>--strategy</string><string>dmr</string>
+    <string>--symbols</string><string>SPY,QQQ,IWM</string>
+    <string>--interval</string><string>1d</string>
+    <string>--days</string><string>730</string>
+    <string>--is-sessions</string><string>120</string>
+    <string>--oos-sessions</string><string>60</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/devantipler/quant-desk</string>
+  <key>StartCalendarInterval</key>
+  <dict><key>Weekday</key><integer>6</integer><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>/Users/devantipler/quant-desk/dmr-review.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/devantipler/quant-desk/dmr-review.err.log</string>
+</dict>
+</plist>

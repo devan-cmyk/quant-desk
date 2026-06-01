@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- dmr portfolio allocation. Saturdays 13:30 (after dmr-monitor). Correlation-aware risk
+     weights across the approved dmr pairs, backtested on daily bars with their validated params.
+     No --regime: the contrarian backtest must not be trend-filtered, so this runs unconditional
+     (correlation + inverse-vol, no regime tilt). Read-only research; paper-only.
+     Install: cp scripts/com.quantdesk.dmr-allocate.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.quantdesk.dmr-allocate.plist -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.quantdesk.dmr-allocate</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/devantipler/quant-desk/.venv/bin/quant-desk</string>
+    <string>allocate</string>
+    <string>--strategy</string><string>dmr</string>
+    <string>--interval</string><string>1d</string>
+    <string>--days</string><string>730</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/devantipler/quant-desk</string>
+  <key>StartCalendarInterval</key>
+  <dict><key>Weekday</key><integer>6</integer><key>Hour</key><integer>13</integer><key>Minute</key><integer>30</integer></dict>
+  <key>StandardOutPath</key><string>/Users/devantipler/quant-desk/dmr-allocate.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/devantipler/quant-desk/dmr-allocate.err.log</string>
+</dict>
+</plist>
