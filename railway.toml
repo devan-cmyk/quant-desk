@@ -1,0 +1,10 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "sh -c 'exec uvicorn quant_desk.dashboard.app:app --host 0.0.0.0 --port ${PORT:-8800} --workers 1 --proxy-headers --forwarded-allow-ips=\"*\"'"
+healthcheckPath = "/"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
