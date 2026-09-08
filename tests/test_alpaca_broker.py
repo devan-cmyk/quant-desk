@@ -1,5 +1,5 @@
-"""Alpaca adapter — safety gates (the point) + order lifecycle, all offline via a mock HTTP
-client. No network, no credentials. The local sim broker stays the default everywhere."""
+"""Alpaca PAPER adapter — safety gates + order lifecycle, all offline via a mock HTTP client.
+No network, no credentials. Real-money execution is intentionally absent from this adapter."""
 import pytest
 
 from quant_desk.execution.alpaca_broker import AlpacaBroker, BrokerDisabled, BrokerError
@@ -40,11 +40,11 @@ def test_requires_credentials(monkeypatch):
         AlpacaBroker(http=_MockHTTP())
 
 
-def test_live_routing_requires_the_triple_lock(monkeypatch):
-    from quant_desk.execution.live_guard import LiveTradingLocked
-    _enable(monkeypatch)                                   # enabled + creds, but paper=False (real money)
-    with pytest.raises(LiveTradingLocked):                 # must inherit the live triple-lock
-        AlpacaBroker(paper=False, http=_MockHTTP())
+def test_live_routing_is_hard_disabled_even_if_other_locks_exist(monkeypatch):
+    _enable(monkeypatch)
+    monkeypatch.setenv("QD_ALLOW_LIVE_ENV", "1")
+    with pytest.raises(BrokerDisabled, match="real-money order submission is intentionally disabled"):
+        AlpacaBroker(paper=False, unlock_token="anything", http=_MockHTTP())
 
 
 def test_paper_routing_arms_with_enable_and_creds(monkeypatch):
