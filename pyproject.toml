@@ -31,7 +31,7 @@ Homepage = "https://github.com/devan-cmyk/quant-desk"
 Repository = "https://github.com/devan-cmyk/quant-desk"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "httpx>=0.27", "httpx2>=2.0"]
 dashboard = ["fastapi>=0.110", "uvicorn>=0.29"]
 
 [project.scripts]

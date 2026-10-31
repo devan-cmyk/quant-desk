@@ -8,13 +8,15 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 
 
 def atomic_write_json(path: str, obj, *, indent: int = 2) -> None:
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    tmp = f"{path}.{os.getpid()}.tmp"
+    fd, tmp = tempfile.mkstemp(prefix=f".{os.path.basename(path)}.", suffix=".tmp",
+                               dir=os.path.dirname(path) or ".")
     try:
-        with open(tmp, "w") as f:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(obj, f, indent=indent)
             f.flush()
             os.fsync(f.fileno())          # durable before the rename
@@ -22,3 +24,4 @@ def atomic_write_json(path: str, obj, *, indent: int = 2) -> None:
     finally:
         if os.path.exists(tmp):
             os.unlink(tmp)
+
