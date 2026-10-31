@@ -42,3 +42,22 @@ def test_concurrent_reads_never_tear(tmp_path):
     [t.start() for t in ts]; time.sleep(0.8); stop["v"] = True; [t.join() for t in ts]
     assert reads["v"] > 0          # actually exercised concurrent reads
     assert torn["v"] == 0          # and none of them saw a partial file
+
+
+
+def test_overlapping_writers_use_distinct_temporary_files(tmp_path, monkeypatch):
+    import quant_desk.storage as storage
+    from concurrent.futures import ThreadPoolExecutor
+    barrier = threading.Barrier(2)
+    original_replace = storage.os.replace
+
+    def synchronized_replace(src, dst):
+        barrier.wait(timeout=5)
+        return original_replace(src, dst)
+
+    monkeypatch.setattr(storage.os, "replace", synchronized_replace)
+    target = str(tmp_path / "shared.json")
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        list(pool.map(lambda i: atomic_write_json(target, {"writer": i}), range(2)))
+    assert json.loads((tmp_path / "shared.json").read_text()) in ({"writer": 0}, {"writer": 1})
+    assert list(tmp_path.iterdir()) == [tmp_path / "shared.json"]

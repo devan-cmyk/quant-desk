@@ -58,8 +58,8 @@ def _valid_token(token: str | None) -> bool:
     expected_user, _ = _dashboard_credentials()
     return (
         expires >= int(time.time())
-        and hmac.compare_digest(user, expected_user)
-        and hmac.compare_digest(signature, _sign(user, expires))
+        and hmac.compare_digest(user.encode("utf-8"), expected_user.encode("utf-8"))
+        and hmac.compare_digest(signature.encode("utf-8"), _sign(user, expires).encode("utf-8"))
     )
 
 
@@ -81,8 +81,10 @@ async def require_dashboard_auth(request: Request, call_next):
     if request.url.path in {"/healthz", "/login"}:
         return await call_next(request)
     username, password = _dashboard_credentials()
-    if not username or not password:
+    if not username and not password:
         return await call_next(request)
+    if not username or not password:
+        return JSONResponse({"detail": "dashboard authentication is incompletely configured"}, status_code=503)
     if _valid_token(request.cookies.get(_COOKIE)):
         return await call_next(request)
     if request.url.path.startswith("/api/"):
@@ -102,9 +104,11 @@ async def login(request: Request):
     supplied_user = (form.get("username") or [""])[0]
     supplied_pass = (form.get("password") or [""])[0]
     username, password = _dashboard_credentials()
-    if not username or not password:
+    if not username and not password:
         return RedirectResponse("/", status_code=303)
-    if not (hmac.compare_digest(supplied_user, username) and hmac.compare_digest(supplied_pass, password)):
+    if not username or not password:
+        return JSONResponse({"detail": "dashboard authentication is incompletely configured"}, status_code=503)
+    if not (hmac.compare_digest(supplied_user.encode("utf-8"), username.encode("utf-8")) and hmac.compare_digest(supplied_pass.encode("utf-8"), password.encode("utf-8"))):
         return HTMLResponse(_login_page("Incorrect username or password."), status_code=401)
     response = RedirectResponse("/", status_code=303)
     response.set_cookie(
@@ -239,3 +243,4 @@ def journal(n: int = 30) -> dict:
 def index() -> str:
     with open(os.path.join(HERE, "index.html")) as f:
         return f.read()
+
